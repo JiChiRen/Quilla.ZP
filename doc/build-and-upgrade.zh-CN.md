@@ -143,6 +143,11 @@ arm-none-eabi-objdump -h C:\zph\build\zephyr\zephyr.elf
 用现有工具合成出厂镜像（SEC 变体需要
 `quilla/tools/_keytest/private.hex` 测试私钥）：
 
+**工具的 `FLASH_SIZE` / `APP_SIZE` / `RAM_SIZE` 是芯片相关配置**，此处按
+GD32F502VE（512 KiB Flash / 64 KiB SRAM）设置。移植到其它 MCU 时，常量表、
+QBOOT 与 APP 侧必须同步修改的位置，以及与 Quilla.FR 的对照，见
+[MCU 移植说明](mcu-porting.zh-CN.md)。
+
 ```
 python tools\qboot_image.py pack --boot <QBOOT_SEC.bin> ^
   --app C:\zph\build\zephyr\zephyr.bin --out combined.bin ^

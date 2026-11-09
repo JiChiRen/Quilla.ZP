@@ -61,6 +61,10 @@ binding 与 CRC 行为均已对照锁定的 Zephyr 4.4 源码核实，但仍需�
 几何、META 记录布局、flag 取值、secver 魔数、串口接线与 CRC 参考向量。每次
 拉取上游后都应重跑。
 
+移植到其它 MCU 时需注意：`tools/qboot_image.py` 中的容量按 GD32F502VE
+（512 KiB Flash / 64 KiB SRAM）固化。常量表与必须同步修改的位置见
+[doc/mcu-porting.zh-CN.md](doc/mcu-porting.zh-CN.md)。
+
 ## 许可
 
 本仓库自有文件采用 BSD-3（见 `LICENSE`）。两个上游 clone 保留各自许可

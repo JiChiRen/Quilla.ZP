@@ -69,6 +69,11 @@ checklist.
 It compares partition geometry, META record layout, flag values, secver magic,
 console wiring and the CRC reference vector. Run it after every upstream pull.
 
+For porting to another MCU, `tools/qboot_image.py` hard-codes the GD32F502VE
+geometry (512 KiB Flash / 64 KiB SRAM). See
+[doc/mcu-porting.md](doc/mcu-porting.md) for the constant table and the
+synchronisation checklist.
+
 ## License
 
 The appliance-owned files are BSD-3 (see `LICENSE`). The two upstream clones

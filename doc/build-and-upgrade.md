@@ -152,6 +152,11 @@ Checklist:
 Pack a factory image with the existing tool (the SEC variant needs the test
 private key from `quilla/tools/_keytest/private.hex`):
 
+**The tool's `FLASH_SIZE` / `APP_SIZE` / `RAM_SIZE` are MCU-specific** and are
+set here for GD32F502VE (512 KiB Flash / 64 KiB SRAM). For another MCU, see
+[MCU porting guide](mcu-porting.md) for the constant table, the QBOOT/APP
+definitions that must be updated together, and the Quilla.FR comparison.
+
 ```
 python tools\qboot_image.py pack --boot <QBOOT_SEC.bin> ^
   --app C:\zph\build\zephyr\zephyr.bin --out combined.bin ^
