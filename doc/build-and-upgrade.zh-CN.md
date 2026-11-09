@@ -2,9 +2,9 @@
 
 **[English](build-and-upgrade.md)**
 
-> **状态**：以下命令依据锁定的 Zephyr 4.4 源码树与 Zephyr 官方入门文档整理，
-> **尚未在本工作区执行过**，还没有跑过任何一次 `west build`。首次构建应视为
-> 验证步骤，而不是已证实的流程。
+> **状态**：本工作区已按第 3 节流程完成一次干净的 `west build`（Windows 原生 +
+> gnuarmemb，零告警），`zephyr.bin/elf/hex` 均正常产出，secver 段已核实位于
+> `0x08007400`。**上板验证尚未执行**，第 6、7 节的检查项仍需真机确认。
 
 ## 1. 主机工具（Windows 原生）
 
@@ -126,6 +126,16 @@ ninja -C C:\zph\build
 `find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})`，因此 `ZEPHYR_BASE`
 决定选用哪棵 Zephyr 树。
 
+> **路径含空格的坑（Windows 实测）**：若工程路径含空格（如本工作区），会踩两个坑：
+> ① CMake 生成的 `-imacros` 参数未加引号，被空格拆开，Ninja 直接报错；
+> ② Zephyr 的 `K_THREAD_DEFINE`/`K_HEAP_DEFINE` 把 `__FILE__` 嵌进汇编段名且不加引号，
+> GNU as 遇到空格报 `junk at end of line`。可行变通：配置成功后，把
+> `build/build.ninja` 与 `build/zephyr/misc/generated/syscalls_file_list.txt`
+> 中的长路径统一替换为 8.3 短路径（如 `C:\PROGRA~1` 形式），再运行 `ninja`。
+> 注意 `syscalls_file_list.txt` 与扫描目录必须用同一种路径形式，否则同一头文件
+> 会被解析两次，生成的 syscall 头重复定义。**把工程放在不含空格的路径下则全部免疫，
+> 这是推荐做法。**
+
 ## 5. 烧录前验证镜像
 
 ```
@@ -171,7 +181,7 @@ python C:\zph\quilla\tools\quilla_host_updater.py COM7 C:\zph\build\zephyr\zephy
 `swqboot` -> `[BOOT]` 横幅，随后用新镜像完成第二次完整 QIAP 升级。用 Keil
 烧录时选「Erase Sectors」而非全片擦除，避免抹掉 META manifest。
 
-## 7. 首次构建前的已知风险
+## 7. 已知风险（编译已过，待上板确认）
 
 - 为 GD32F502VE 复用 `gd32f503` SoC 描述尚未验证；外设地址、RCU 门控与
   FMC 行为需上板核对。

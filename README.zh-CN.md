@@ -52,10 +52,20 @@ appliance 侧的所有行为都通过 Zephyr 机制注册，不塞进任何无�
 
 ## 验证状态
 
-**本应用尚未编译，也未上板运行。** 创建该工程的工作环境为 Windows，没有
-`west`、Zephyr SDK 或 Linux 构建环境。所有上游 API、Kconfig 符号、devicetree
-binding 与 CRC 行为均已对照锁定的 Zephyr 4.4 源码核实，但仍需完成首次
-`west build` 与真机验证。构建命令与验证清单见 `doc/build-and-upgrade.md`。
+**编译：已验证。上板运行：尚未执行。** 已在本机 Windows 原生环境用 Zephyr 4.4
+（`ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb`，GNU Arm Embedded 13.2）完成一次干净的
+`west build -b gd32f502ve_quilla`，零告警通过：
+
+- FLASH 42 004 B / 484 KB（8.48 %），RAM 9 112 B / 64 KB（13.9 %）
+- `quilla_secver`（QAV1）段精确落在 `0x08007400`，已在 `zephyr.bin` 中核实
+  （偏移 0x400 处为 `QAV1` + 安全版本号）
+- `CONFIG_FLASH_LOAD_OFFSET=0x7000`，`CONFIG_FLASH_LOAD_SIZE=0x79000`
+
+Windows 注意事项：本工作区路径含空格，会同时破坏 CMake/Ninja 与 GCC
+（`__FILE__` 进入未加引号的汇编段名）。本工作区的构建目录采用文档化的变通
+方案（配置完成后统一替换为 8.3 短路径），见 `doc/build-and-upgrade.md`。
+把工程放在不含空格的路径下则完全不受影响。`doc/build-and-upgrade.md` 中的
+上板检查项（时钟交接、shell、QIAP 升级）仍需真机验证。
 
 `python tools/check_contract.py` 对两个 clone 的 22 项检查全部通过，覆盖分区
 几何、META 记录布局、flag 取值、secver 魔数、串口接线与 CRC 参考向量。每次

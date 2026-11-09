@@ -2,10 +2,11 @@
 
 **[中文](build-and-upgrade.zh-CN.md)**
 
-> **Status**: the commands below are derived from the pinned Zephyr 4.4 tree
-> and the official Zephyr getting-started instructions. They have **not** been
-> executed in this workspace; no `west build` has run yet. Treat the first
-> build as a verification step, not a proven procedure.
+> **Status**: a clean `west build` following section 3 has been executed in
+> this workspace (native Windows + gnuarmemb, zero warnings);
+> `zephyr.bin/elf/hex` were produced and the secver section was verified at
+> `0x08007400`. **On-target verification has not been performed**; the checks
+> in sections 6 and 7 still require hardware.
 
 ## 1. Host tools (Windows native)
 
@@ -134,6 +135,19 @@ the board directory itself. `app/CMakeLists.txt` uses
 `find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})`, so `ZEPHYR_BASE` is
 what selects the GD32 downstream tree.
 
+> **Space-in-path pitfall (verified on Windows)**: if the project path
+> contains spaces, two failures occur: ① CMake emits unquoted `-imacros`
+> arguments that get split at the space, and Ninja fails; ② Zephyr's
+> `K_THREAD_DEFINE`/`K_HEAP_DEFINE` embed `__FILE__` into assembler section
+> names without quoting, and GNU as reports `junk at end of line`. A working
+> workaround: after a successful configure, replace the long paths in
+> `build/build.ninja` and `build/zephyr/misc/generated/syscalls_file_list.txt`
+> with 8.3 short paths (e.g. the `C:\PROGRA~1` form), then run `ninja`. The
+> file list and the scan directories must use the same path form, otherwise
+> every syscall header is parsed twice and the generated syscall headers
+> contain duplicate definitions. **Placing the project under a space-free
+> path avoids all of this and is the recommended approach.**
+
 ## 5. Verify the produced image before flashing
 
 ```
@@ -181,7 +195,7 @@ Verify on hardware: banner with no garbling (160 MHz clock handover),
 upgrade with the new image. Use "Erase Sectors" rather than full-chip erase
 when flashing with Keil, so the META manifest is not wiped.
 
-## 7. Known risks before the first build
+## 7. Known risks (build passes, on-target confirmation pending)
 
 - Reusing the `gd32f503` SoC description for a GD32F502VE part is unverified;
   peripheral addresses, RCU gating and FMC behaviour need on-target checks.

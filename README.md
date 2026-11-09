@@ -57,13 +57,23 @@ See `doc/zephyr-integration.md` for the rationale of each choice.
 
 ## Verification status
 
-**This application has not been compiled or run on hardware.** The Windows
-workspace used to create it has no `west`, no Zephyr SDK and no Linux build
-environment. All upstream APIs, Kconfig symbols, devicetree bindings and CRC
-behaviour were checked against the pinned Zephyr 4.4 tree, but a first
-`west build` and an on-target run are still required. See
-`doc/build-and-upgrade.md` for the exact build commands and the verification
-checklist.
+**Compiles: verified. On-target run: not yet performed.** A full clean
+`west build -b gd32f502ve_quilla` was executed on native Windows with
+Zephyr 4.4 (ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb, GNU Arm Embedded 13.2)
+and completes with zero warnings:
+
+- FLASH 42 004 B / 484 KB (8.48 %), RAM 9 112 B / 64 KB (13.9 %)
+- the `quilla_secver` (QAV1) section lands exactly at `0x08007400`,
+  verified in `zephyr.bin` (`QAV1` + security version at offset 0x400)
+- `CONFIG_FLASH_LOAD_OFFSET=0x7000`, `CONFIG_FLASH_LOAD_SIZE=0x79000`
+
+Windows notes: the workspace path contains a space, which breaks both
+CMake/Ninja and GCC (`__FILE__` ends up inside unquoted assembler section
+names). The build directory in this workspace uses a documented workaround
+(8.3 short paths everywhere after configuration); see
+`doc/build-and-upgrade.md`. Place the project under a space-free path and
+none of this applies. The on-target checks in `doc/build-and-upgrade.md`
+(clock handover, shell, QIAP upgrade) are still required.
 
 `python tools/check_contract.py` passes 22/22 checks against the two clones.
 It compares partition geometry, META record layout, flag values, secver magic,
