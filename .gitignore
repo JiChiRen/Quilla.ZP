@@ -4,8 +4,14 @@
 /quilla/
 /appliance/
 
+# Third-party Zephyr modules fetched for the native build. They are
+# independent clones (hal_gigadevice, cmsis_6) pinned by appliance/west.yml.
+/modules/
+
 # Zephyr / CMake build products
-/app/build/
+/app/build*/
+/app/cmake.log
+/app/build.log
 /build/
 **/build/zephyr/
 *.elf

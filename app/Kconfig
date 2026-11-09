@@ -42,3 +42,8 @@ config QUILLA_ZP_LED_BEAT_MS
 	default 1000
 
 endmenu
+
+# An application Kconfig replaces the Zephyr root Kconfig, so the upstream
+# tree must be sourced explicitly. Without this line no CONFIG_* symbol
+# outside this file exists and the build aborts with "undefined symbol".
+source "Kconfig.zephyr"

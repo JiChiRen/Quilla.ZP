@@ -79,10 +79,8 @@ SHELL_CMD_REGISTER(swqboot, NULL, "Switch to QBOOT for an upgrade", cmd_swqboot)
  * takes over the UART, so the banner arrives as one clean line. Registered
  * through SYS_INIT rather than called from main(): the console and the shell
  * are separate Zephyr subsystems and must not depend on the app thread. */
-static int quilla_zp_banner(const struct device *dev)
+static int quilla_zp_banner(void)
 {
-	ARG_UNUSED(dev);
-
 	printk("[QAPP] " CONFIG_QUILLA_ZP_APP_NAME " "
 	       CONFIG_QUILLA_ZP_APP_VERSION "\n");
 	return 0;
