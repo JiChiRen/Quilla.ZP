@@ -57,23 +57,35 @@ See `doc/zephyr-integration.md` for the rationale of each choice.
 
 ## Verification status
 
-**Compiles: verified. On-target run: not yet performed.** A full clean
-`west build -b gd32f502ve_quilla` was executed on native Windows with
-Zephyr 4.4 (ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb, GNU Arm Embedded 13.2)
-and completes with zero warnings:
+**Compiles: verified. On-target: full QIAP upgrade passed on hardware
+(2026-11-09).** A full clean `west build -b gd32f502ve_quilla` was executed
+on native Windows with Zephyr 4.4 (ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb, GNU
+Arm Embedded 13.2) and completes with zero warnings:
 
 - FLASH 42 004 B / 484 KB (8.48 %), RAM 9 112 B / 64 KB (13.9 %)
 - the `quilla_secver` (QAV1) section lands exactly at `0x08007400`,
   verified in `zephyr.bin` (`QAV1` + security version at offset 0x400)
 - `CONFIG_FLASH_LOAD_OFFSET=0x7000`, `CONFIG_FLASH_LOAD_SIZE=0x79000`
 
+Verified on real hardware (GD32F502VE, QBOOT V0.11.0002 in SEC mode):
+
+- upgrade from the previous APP via `swqboot` -> QBOOT -> QIAP: 42 004 B
+  written in 5.2 s, SIGN verified (ACK_SIGN 0x84), anti-rollback accepted
+  secver=1
+- after the jump the banner `[QAPP] Quilla.ZP V1.0.0001` arrives as one
+  clean line (160 MHz clock handover and baud rate derivation correct)
+- the Zephyr shell works; `help` lists `part` / `version` / `swqboot` etc.
+
+Still open: the appliance's own `swqboot` (META flag write through the
+Zephyr flash driver under XIP + cold reboot) and a second full upgrade
+initiated from the ZP APP; the `part` output was not captured in the log.
+
 Windows notes: the workspace path contains a space, which breaks both
 CMake/Ninja and GCC (`__FILE__` ends up inside unquoted assembler section
 names). The build directory in this workspace uses a documented workaround
 (8.3 short paths everywhere after configuration); see
 `doc/build-and-upgrade.md`. Place the project under a space-free path and
-none of this applies. The on-target checks in `doc/build-and-upgrade.md`
-(clock handover, shell, QIAP upgrade) are still required.
+none of this applies.
 
 `python tools/check_contract.py` passes 22/22 checks against the two clones.
 It compares partition geometry, META record layout, flag values, secver magic,

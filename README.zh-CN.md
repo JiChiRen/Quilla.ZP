@@ -52,20 +52,30 @@ appliance 侧的所有行为都通过 Zephyr 机制注册，不塞进任何无�
 
 ## 验证状态
 
-**编译：已验证。上板运行：尚未执行。** 已在本机 Windows 原生环境用 Zephyr 4.4
-（`ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb`，GNU Arm Embedded 13.2）完成一次干净的
-`west build -b gd32f502ve_quilla`，零告警通过：
+**编译：已验证。上板：QIAP 全流程升级一次通过（2026-11-09）。** 已在本机
+Windows 原生环境用 Zephyr 4.4（`ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb`，GNU Arm
+Embedded 13.2）完成一次干净的 `west build -b gd32f502ve_quilla`，零告警通过：
 
 - FLASH 42 004 B / 484 KB（8.48 %），RAM 9 112 B / 64 KB（13.9 %）
 - `quilla_secver`（QAV1）段精确落在 `0x08007400`，已在 `zephyr.bin` 中核实
   （偏移 0x400 处为 `QAV1` + 安全版本号）
 - `CONFIG_FLASH_LOAD_OFFSET=0x7000`，`CONFIG_FLASH_LOAD_SIZE=0x79000`
 
+真机（GD32F502VE，QBOOT V0.11.0002 SEC 模式）已验证：
+
+- 旧 APP `swqboot` → QBOOT → QIAP 完整升级：42004 B / 5.2 s 写入，SIGN 验签
+  通过（ACK_SIGN 0x84），防回滚 secver=1 被接受
+- QBOOT 跳转后横幅 `[QAPP] Quilla.ZP V1.0.0001` 一行干净输出（160 MHz 时钟
+  交接与波特率推导正确，无乱码）
+- Zephyr shell 正常工作，`help` 列出 `part` / `version` / `swqboot` 等
+
+尚未验证：ZP 自身 `swqboot`（XIP 下 Zephyr flash 驱动写 META flag + 冷复位）
+及从 ZP APP 发起的第二次完整升级；`part` 输出未在日志中确认。
+
 Windows 注意事项：本工作区路径含空格，会同时破坏 CMake/Ninja 与 GCC
 （`__FILE__` 进入未加引号的汇编段名）。本工作区的构建目录采用文档化的变通
 方案（配置完成后统一替换为 8.3 短路径），见 `doc/build-and-upgrade.md`。
-把工程放在不含空格的路径下则完全不受影响。`doc/build-and-upgrade.md` 中的
-上板检查项（时钟交接、shell、QIAP 升级）仍需真机验证。
+把工程放在不含空格的路径下则完全不受影响。
 
 `python tools/check_contract.py` 对两个 clone 的 22 项检查全部通过，覆盖分区
 几何、META 记录布局、flag 取值、secver 魔数、串口接线与 CRC 参考向量。每次

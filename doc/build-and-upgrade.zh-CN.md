@@ -4,7 +4,9 @@
 
 > **状态**：本工作区已按第 3 节流程完成一次干净的 `west build`（Windows 原生 +
 > gnuarmemb，零告警），`zephyr.bin/elf/hex` 均正常产出，secver 段已核实位于
-> `0x08007400`。**上板验证尚未执行**，第 6、7 节的检查项仍需真机确认。
+> `0x08007400`。**真机 QIAP 升级已一次通过（2026-11-09，QBOOT SEC 模式，验签
+> ACK_SIGN 0x84，横幅无乱码，shell 正常）**。仍待验证：ZP 自身 `swqboot`
+> （XIP 下写 META flag + 冷复位）与从 ZP APP 发起的第二次完整升级（见第 6、7 节）。
 
 ## 1. 主机工具（Windows 原生）
 
