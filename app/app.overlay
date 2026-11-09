@@ -1,0 +1,33 @@
+/*
+ * Copyright (c) 2026, JiChiRen Info. Tech.
+ * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Optional board wiring that is not part of the QBOOT contract.
+ *
+ * The QBOOT console (USART0 / PB6-PB7 / 115200), the flash geometry and the
+ * core clock are fixed in the out-of-tree board definition under
+ * app/boards/gd/gd32f502ve_quilla/. Nothing here may change them.
+ *
+ * To enable the LED heart-beat thread, add a led0 alias matching the LED on
+ * the actual board, for example:
+ *
+ *   / {
+ *       leds {
+ *           compatible = "gpio-leds";
+ *           led0: led_0 {
+ *               gpios = <&gpiob 2 GPIO_ACTIVE_LOW>;
+ *               label = "User LED";
+ *           };
+ *       };
+ *
+ *       aliases { led0 = &led0; };
+ *   };
+ *
+ * Without led0 the application still builds and runs: the shell and the
+ * QIAP handover remain fully available, and the LED thread is not created.
+ */
+
+/* Keep the overlay a valid devicetree fragment even when nothing is added. */
+/ {
+};

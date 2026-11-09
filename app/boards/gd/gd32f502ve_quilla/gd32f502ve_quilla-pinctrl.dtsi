@@ -1,0 +1,20 @@
+/*
+ * Copyright (c) 2026, JiChiRen Info. Tech.
+ * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * USART0 remapped to PB6 (TX) / PB7 (RX), AF0 -- identical to QBOOT's
+ * arch/cpu/arm/gd32f502ve/shellport.c binding. The pinmux macros come from
+ * the hal_gigadevice module pulled by `west update`.
+ */
+
+#include <dt-bindings/pinctrl/gd32f503v(g-e-c)xx-pinctrl.h>
+
+&pinctrl {
+	usart0_quilla: usart0_quilla {
+		group1 {
+			pinmux = <USART0_TX_PB6>, <USART0_RX_PB7>;
+			bias-pull-up;
+		};
+	};
+};

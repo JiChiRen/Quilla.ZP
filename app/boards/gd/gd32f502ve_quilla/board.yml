@@ -1,0 +1,10 @@
+# Copyright (c) 2026, JiChiRen Info. Tech.
+# All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+board:
+  name: gd32f502ve_quilla
+  full_name: Quilla.ZP GD32F502VE appliance behind Quilla QBOOT
+  vendor: gd
+  socs:
+    - name: gd32f503

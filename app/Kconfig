@@ -1,0 +1,44 @@
+# Copyright (c) 2026, JiChiRen Info. Tech.
+# All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+menu "Quilla.ZP appliance"
+
+config QUILLA_ZP_SECURITY_VERSION
+	int "Firmware security version (QAV1 record)"
+	default 1
+	range 1 4294967295
+	help
+	  Version baked into the signed image at APP_START + 0x400. QBOOT reads
+	  it and refuses to install an image below the persisted floor. The
+	  value is part of the signed image; never supply it from the host.
+
+config QUILLA_ZP_APP_NAME
+	string "Application name printed in the [QAPP] banner"
+	default "Quilla.ZP"
+
+config QUILLA_ZP_APP_VERSION
+	string "Application version string"
+	default "V1.0.0001"
+
+config QUILLA_ZP_META_BASE
+	hex "META region base address"
+	default 0x08006000
+
+config QUILLA_ZP_META_SIZE
+	hex "META region size"
+	default 0x1000
+
+config QUILLA_ZP_APP_START
+	hex "APP region base address"
+	default 0x08007000
+
+config QUILLA_ZP_SECVER_OFFSET
+	hex "Security-version record offset from APP start"
+	default 0x400
+
+config QUILLA_ZP_LED_BEAT_MS
+	int "LED heart-beat period in milliseconds (0 disables)"
+	default 1000
+
+endmenu

@@ -1,0 +1,27 @@
+# quilla/ and appliance/ are independent clones of their upstream projects.
+# They are deliberately NOT tracked here: keep both pullable/mergeable at any
+# time. See README.md for the clone commands.
+/quilla/
+/appliance/
+
+# Zephyr / CMake build products
+/app/build/
+/build/
+**/build/zephyr/
+*.elf
+*.bin
+*.hex
+*.map
+*.o
+*.d
+*.lst
+CMakeCache.txt
+CMakeFiles/
+
+# Python
+__pycache__/
+*.pyc
+
+# Local build state (never publish)
+/.west/
+/.venv/

@@ -1,0 +1,6 @@
+# Copyright (c) 2026, JiChiRen Info. Tech.
+# All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+config BOARD_GD32F502VE_QUILLA
+	select SOC_GD32F503

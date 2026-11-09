@@ -1,0 +1,61 @@
+/*
+ * Copyright (c) 2026, JiChiRen Info. Tech.
+ * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Out-of-tree board for the GD32F502VE target used by Quilla QBOOT.
+ * The upstream gd32f50x SoC description is reused; this file overrides the
+ * part-specific flash/SRAM sizes and the core clock, and binds the console
+ * to the same USART0 / PB6-PB7 / 115200 wiring QBOOT uses.
+ */
+
+/dts-v1/;
+
+#include <gd/gd32f50x/gd32f503vg.dtsi>
+#include "gd32f502ve_quilla-pinctrl.dtsi"
+
+/ {
+	model = "Quilla.ZP appliance on GD32F502VE behind Quilla QBOOT";
+	compatible = "gd,gd32f502ve-quilla";
+
+	chosen {
+		zephyr,flash = &flash0;
+		zephyr,sram = &sram0;
+		zephyr,flash-controller = &fmc;
+		zephyr,console = &usart0;
+		zephyr,shell-uart = &usart0;
+	};
+
+	aliases {
+		/* led0 is intentionally not defined here: the reference board's LED
+		 * pin is not part of the QBOOT contract. Add a led0 alias in
+		 * app.overlay to enable the heart-beat thread. */
+	};
+};
+
+/* GD32F502VE: 512 KiB Flash / 64 KiB SRAM, 160 MHz (8 MHz HXTAL -> PLL).
+ * QBOOT leaves the RCC configured at 160 MHz when it jumps; declaring the
+ * same frequency here keeps Zephyr's clock driver and UART baud derivation
+ * consistent with the inherited clock tree. */
+&cpu0 {
+	clock-frequency = <DT_FREQ_M(160)>;
+};
+
+&flash0 {
+	reg = <0x08000000 DT_SIZE_K(512)>;
+};
+
+&sram0 {
+	reg = <0x20000000 DT_SIZE_K(64)>;
+};
+
+&usart0 {
+	status = "okay";
+	current-speed = <115200>;
+	pinctrl-0 = <&usart0_quilla>;
+	pinctrl-names = "default";
+};
+
+&gpiob {
+	status = "okay";
+};
