@@ -73,12 +73,15 @@ Verified on real hardware (GD32F502VE, QBOOT V0.11.0002 in SEC mode):
   written in 5.2 s, SIGN verified (ACK_SIGN 0x84), anti-rollback accepted
   secver=1
 - after the jump the banner `[QAPP] Quilla.ZP V1.0.0001` arrives as one
-  clean line (160 MHz clock handover and baud rate derivation correct)
+  clean line (160 MHz clock handover and baud rate derivation correct);
+  repeated cold boots behave identically
 - the Zephyr shell works; `help` lists `part` / `version` / `swqboot` etc.
-
-Still open: the appliance's own `swqboot` (META flag write through the
-Zephyr flash driver under XIP + cold reboot) and a second full upgrade
-initiated from the ZP APP; the `part` output was not captured in the log.
+- the appliance's own `swqboot` (META flag write through the Zephyr flash
+  driver under XIP + cold reboot) returns to the `[BOOT]` banner without a
+  META commit failure
+- a second full QIAP upgrade initiated from the ZP APP (same image,
+  secver=1) passes with ACK_SIGN 0x84 again; META dual-slot records and
+  anti-rollback behave correctly across repeated upgrades
 
 Windows notes: the workspace path contains a space, which breaks both
 CMake/Ninja and GCC (`__FILE__` ends up inside unquoted assembler section

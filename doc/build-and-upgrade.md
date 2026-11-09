@@ -5,11 +5,11 @@
 > **Status**: a clean `west build` following section 3 has been executed in
 > this workspace (native Windows + gnuarmemb, zero warnings);
 > `zephyr.bin/elf/hex` were produced and the secver section was verified at
-> `0x08007400`. **The on-target QIAP upgrade passed on hardware on
-> 2026-11-09 (QBOOT SEC mode, signature verified with ACK_SIGN 0x84, clean
-> banner, working shell)**. Still open: the appliance's own `swqboot`
-> (META flag write under XIP + cold reboot) and a second full upgrade
-> initiated from the ZP APP (sections 6 and 7).
+> `0x08007400`. **On-target verification is closed (2026-11-09, QBOOT SEC
+> mode)**: two full QIAP upgrades passed (ACK_SIGN 0x84), clean banner,
+> identical cold boots, working shell, and the appliance's own `swqboot`
+> (META flag write under XIP + cold reboot) returned to the `[BOOT]` banner.
+> Sections 6 and 7 remain as a re-verification checklist.
 
 ## 1. Host tools (Windows native)
 

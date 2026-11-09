@@ -66,11 +66,12 @@ Embedded 13.2）完成一次干净的 `west build -b gd32f502ve_quilla`，零告
 - 旧 APP `swqboot` → QBOOT → QIAP 完整升级：42004 B / 5.2 s 写入，SIGN 验签
   通过（ACK_SIGN 0x84），防回滚 secver=1 被接受
 - QBOOT 跳转后横幅 `[QAPP] Quilla.ZP V1.0.0001` 一行干净输出（160 MHz 时钟
-  交接与波特率推导正确，无乱码）
+  交接与波特率推导正确，无乱码）；多次冷启动结果一致
 - Zephyr shell 正常工作，`help` 列出 `part` / `version` / `swqboot` 等
-
-尚未验证：ZP 自身 `swqboot`（XIP 下 Zephyr flash 驱动写 META flag + 冷复位）
-及从 ZP APP 发起的第二次完整升级；`part` 输出未在日志中确认。
+- ZP 自身 `swqboot`（XIP 下 Zephyr flash 驱动写 META flag + 冷复位）成功回到
+  `[BOOT]` 横幅，未报 META 提交失败
+- 从 ZP APP 发起的第二次完整 QIAP 升级（同版本 secver=1）再次通过
+  ACK_SIGN 0x84，META 双槽记录与防回滚在重复升级下表现正常
 
 Windows 注意事项：本工作区路径含空格，会同时破坏 CMake/Ninja 与 GCC
 （`__FILE__` 进入未加引号的汇编段名）。本工作区的构建目录采用文档化的变通
