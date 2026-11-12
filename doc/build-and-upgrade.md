@@ -2,14 +2,17 @@
 
 **[中文](build-and-upgrade.zh-CN.md)**
 
-> **Status**: a clean `west build` following section 3 has been executed in
-> this workspace (native Windows + gnuarmemb, zero warnings);
-> `zephyr.bin/elf/hex` were produced and the secver section was verified at
-> `0x08007400`. **On-target verification is closed (2026-11-09, QBOOT SEC
-> mode)**: two full QIAP upgrades passed (ACK_SIGN 0x84), clean banner,
-> identical cold boots, working shell, and the appliance's own `swqboot`
-> (META flag write under XIP + cold reboot) returned to the `[BOOT]` banner.
-> Sections 6 and 7 remain as a re-verification checklist.
+> **Status**: a clean Zephyr build has been completed in this workspace
+> (native Windows + gnuarmemb, zero warnings); outputs are in
+> `app/build-w/zephyr/` and the secver section sits at `0x08007400`.
+> **On-target verification is closed**: 2026-11-09 (QBOOT_SECURED) — two
+> QIAP upgrades with `ACK_SIGN 0x84`, clean banner, identical cold boots,
+> working shell, and the appliance's own `swqboot` returning to `[BOOT]`;
+> 2026-11-12 (GD32 true-OTP, both phases) — `OTP_COUNTER` 1→2,
+> `APP_END=0x0807FFFF` with no clamp, a lower-version image refused with
+> `NAK 0x0A ROLLBACK`, and a same-version upgrade accepted.
+> Sections 6 and 7 remain as re-verification checklists; section 3 records
+> the workspace layout before the repository move.
 
 ## 1. Host tools (Windows native)
 
@@ -81,7 +84,12 @@ set ZEPHYR_TOOLCHAIN_VARIANT=zephyr
 Use Option B if Option A fails or if a reproducible, upstream-tested
 toolchain is required.
 
-## 3. Workspace topology (important)
+## 3. Workspace topology (historical, before the repository move; see section 4)
+
+> This section records the setup used while the repositories lived under a
+> path containing spaces (`...\Midora SA\...`). Since 2026-11-11 all three
+> repos live under `C:\D\workspace\prestudy\Quilla\go\`, which is space-free;
+> junctions are no longer needed.
 
 `appliance/` is a **full Zephyr tree and also the west manifest repo**
 (`appliance/west.yml`, 81 projects). Two constraints follow:
@@ -123,6 +131,30 @@ and `west update hal_gigadevice` there instead.
 
 ## 4. Build commands
 
+> **Path note (after the 2026-11-11 repository move)**: all three repos now
+> live under a space-free path. The `C:\zph` junction in sections 3 and 4 is a
+> record of the earlier workspace. Builds can use the repo's own `.venv`
+> (Python 3.12 / cmake / ninja) and `app/build-w` directly, without any
+> junction; the space-in-path pitfalls below only applied to the old path.
+
+**Current build entry point (after the move)** — run from the Quilla.ZP repo
+root. The command block below is a historical example; do not copy it:
+
+```
+set ZEPHYR_BASE=%CD%\appliance
+set BOARD_ROOT=%CD%\app
+set ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
+set GNUARMEMB_TOOLCHAIN_PATH=C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_Rel1
+set ZEPHYR_MODULES=%CD%\modules\hal\gigadevice;%CD%\modules\hal\cmsis_6
+.venv\Lib\site-packages\cmake\data\bin\cmake.exe -B app\build-w -GNinja -S app -DBOARD=gd32f502ve_quilla -DBOARD_ROOT=app -DPython3_EXECUTABLE=%CD%\.venv\Scripts\python.exe -DCMAKE_MAKE_PROGRAM=%CD%\.venv\Scripts\ninja.exe
+.venv\Scripts\ninja.exe -C app\build-w
+```
+
+`Python3_EXECUTABLE` and `CMAKE_MAKE_PROGRAM` must point into `.venv`:
+otherwise CMake picks the system Python 3.13 (missing Zephyr dependencies) or
+cannot find Ninja. The output is `app\build-w\zephyr\zephyr.bin`; all later
+commands in this guide use the repo root as the working directory.
+
 ```
 set ZEPHYR_BASE=C:\zph\appliance
 set BOARD_ROOT=C:\zph\app
@@ -154,8 +186,8 @@ what selects the GD32 downstream tree.
 ## 5. Verify the produced image before flashing
 
 ```
-arm-none-eabi-nm -n C:\zph\build\zephyr\zephyr.elf | findstr quilla_zp_secver
-arm-none-eabi-objdump -h C:\zph\build\zephyr\zephyr.elf
+arm-none-eabi-nm -n app\build-w\zephyr\zephyr.elf | findstr quilla_zp_secver
+arm-none-eabi-objdump -h app\build-w\zephyr\zephyr.elf
 ```
 
 Checklist:
@@ -166,7 +198,7 @@ Checklist:
 - The first 8 bytes of `zephyr.bin` hold a valid MSP (in SRAM) and a Thumb
   reset address inside the APP region.
 
-Pack a factory image with the existing tool (the SEC variant needs the test
+Pack a factory image with the existing tool (the SECURED variant needs the test
 private key from `quilla/tools/_keytest/private.hex`):
 
 **The tool's `FLASH_SIZE` / `APP_SIZE` / `RAM_SIZE` are MCU-specific** and are
@@ -175,21 +207,42 @@ set here for GD32F502VE (512 KiB Flash / 64 KiB SRAM). For another MCU, see
 definitions that must be updated together, and the Quilla.FR comparison.
 
 ```
-python tools\qboot_image.py pack --boot <QBOOT_SEC.bin> ^
-  --app C:\zph\build\zephyr\zephyr.bin --out combined.bin ^
-  --key C:\zph\quilla\tools\_keytest\private.hex
+python tools\qboot_image.py pack --boot <QBOOT_SECURED.bin> ^
+  --app app\build-w\zephyr\zephyr.bin --out combined.bin ^
+  --key quilla\tools\_keytest\private.hex
 python tools\qboot_image.py verify --image combined.bin
 ```
+
+### Bumping the firmware security version
+
+The single source of `QUILLA_APP_SECURITY_VERSION` is the shared header
+`quilla/os/sys/quilla-version.h` (default `1U`). It sits inside the signed
+image; the host updater never supplies a version, and the ZP appliance has no
+Zephyr Kconfig knob for it. For a release that must not be rolled back,
+override the macro at build time and re-sign the upgrade:
+
+```
+cmake -B app/build-w ... -DEXTRA_CFLAGS=-DQUILLA_APP_SECURITY_VERSION=2
+ninja -C app/build-w
+```
+
+The override lives only in that build directory's CMake cache: reconfiguring
+without the argument falls back to `1U`. Verify that offset `0x400` of
+`zephyr.bin` holds `QAV1` and `0x404` holds the new version, then confirm the
+matching `FW_SECVER` with `secver` after the upgrade. Bumping the version is
+**not a partition change**: `app/Kconfig` geometry is unaffected. The manual
+alignment contract for partition geometry is in section 2 of the
+[MCU porting guide](mcu-porting.md).
 
 ## 6. On-target upgrade
 
 Flash QBOOT first, then use the host updater from the `quilla/` clone:
 
 ```
-python C:\zph\quilla\tools\quilla_host_updater.py COM7 C:\zph\build\zephyr\zephyr.bin --key C:\zph\quilla\tools\_keytest\private.hex
+python quilla\tools\quilla_host_updater.py COM7 app\build-w\zephyr\zephyr.bin --key quilla\tools\_keytest\private.hex
 ```
 
-The completion verdict is `ACK_SIGN 0x84` (SEALED/SEC) or `ACK_END 0x83`
+The completion verdict is `ACK_SIGN 0x84` (SEALED/SECURED) or `ACK_END 0x83`
 (CHECK). The `[QAPP]` boot stamp is only a non-fatal confirmation; the
 appliance prints a complete banner literal, so it should match.
 
@@ -198,7 +251,13 @@ Verify on hardware: banner with no garbling (160 MHz clock handover),
 upgrade with the new image. Use "Erase Sectors" rather than full-chip erase
 when flashing with Keil, so the META manifest is not wiped.
 
-## 7. Known risks (build passes, on-target confirmation pending)
+## 7. Known risks and re-verification checklist
+
+> Items registered during integration. On-target verification on 11-09 / 11-12
+> covered the QIAP path, clock handover, META writes under XIP and secver
+> placement; register-level checks behind the reused SoC description were not
+> individually repeated, so these entries remain a checklist rather than being
+> marked verified.
 
 - Reusing the `gd32f503` SoC description for a GD32F502VE part is unverified;
   peripheral addresses, RCU gating and FMC behaviour need on-target checks.

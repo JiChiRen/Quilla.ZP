@@ -10,16 +10,18 @@
  */
 
 #include "quilla_secver.h"
+#include "quilla-version.h"
 
 #include <zephyr/toolchain.h>
 
 /*
  * Owns the QAV1 region and nothing else. The section name is consumed by
- * app/linker/quilla-secver.ld; the version comes from Kconfig, never from
- * the host updater.
+ * app/linker/quilla-secver.ld. Both the magic and the version come from the
+ * shared Quilla header (single source for QAPP, QBOOT and this appliance);
+ * the version is never supplied by the host updater.
  */
 const quilla_zp_secver_t quilla_zp_secver
 	Z_GENERIC_SECTION(.quilla_secver) __used = {
-	.magic = QUILLA_ZP_SECVER_MAGIC_U32,
-	.version = CONFIG_QUILLA_ZP_SECURITY_VERSION,
+	.magic = QUILLA_APP_SECVER_MAGIC_U32,
+	.version = QUILLA_APP_SECURITY_VERSION,
 };

@@ -27,6 +27,13 @@ APP_SIZE   = FLASH_SIZE - (APP_START - FLASH_BASE) = FLASH_SIZE - 0x7000
 SOC_FLASH_END（QBOOT soc.h） = FLASH_BASE + FLASH_SIZE - 1
 ```
 
+> **`APP_SIZE` ≠ 运行时 APP 区可用长度**：表中 `APP_SIZE` 是工具按芯片 Flash
+> 容量算出的物理分区长度（`combined.bin` 与 `image_len` 上界）。启用受写保护
+> NV 计数器 后，QBOOT 把 `QUILLA_QBOOT_APP_END` 钳到计数区基址前一字节
+> （PY32 → `0x0801DFFF`，可用 `0x17000`），比物理分区少顶部一个扇区；见主仓
+> `doc/anti-rollback-counter.zh-CN.md` §2.1。二者不矛盾；改分区时仍按第 2 节
+> 清单人工对齐。
+
 本板 `SOC_FLASH_END = 0x0807FFFF`，GD32 QBOOT 构建传
 `-DQUILLA_QBOOT_RAM_SIZE=0x00010000U`，使工具的 64 KiB MSP 上界与 QBOOT
 一致。两者不符时，初始 MSP 位于 SRAM 顶端的合法 Zephyr 镜像也可能被
@@ -59,12 +66,37 @@ Zephyr 配置、APP 内 META 写入模块，以及上位机的 `--meta-base` / `
 
 ## 2. 同一组数值必须重复出现的位置
 
+### 人工对齐是有意的设计取舍（hybrid 架构）
+
+Quilla.ZP 是 hybrid 架构：QBOOT 是裸机 C（Keil / GCC 构建，常量来自
+`quilla/os/sys/quilla-version.h`、`quilla-qboot-hal.h` 及构建宏），APP 是
+Zephyr out-of-tree 应用（常量来自 `app/Kconfig`、板级 DTS 与 linker 片段），
+上位机打包工具 `tools/qboot_image.py` 另有自己的 Python 常量。三者不共享构建
+系统，也没有共同生成的配置头。保持上游 Zephyr 树零改动、QBOOT 不引入
+devicetree 依赖是刻意选择，代价就是**分区几何与协议常量必须在多处重复出现，
+靠人工对齐**。这是受控的设计取舍，不是遗漏，也不是待重构的缺陷。
+
+按归属分三类：
+
+| 类别 | 落点 | 是否要人工同步 |
+| --- | --- | --- |
+| 功能开关 | Zephyr：`app/prj.conf`；QBOOT：构建宏 | 否，两侧各管各的 |
+| 分区几何 / 协议常量 | 无单一事实源，以下表为唯一清单 | **是**，改一处必须改全部（见下表） |
+| 固件安全版本 | 共享头 `quilla/os/sys/quilla-version.h` 的 `QUILLA_APP_SECURITY_VERSION` | 否；发布时构建期 `-DQUILLA_APP_SECURITY_VERSION=<n>` 覆盖，**不设 ZP 专用 Kconfig 旋钮** |
+
+只改一边的后果是**静默错开**——QBOOT 读错 META 槽或 `QAV1` 记录、QIAP
+写越界、验签失败——编译期不会显性报错。因此任何分区改动都必须：
+① 逐行核对下表并在所有列出的位置同步修改；② 重跑第 4 节验证命令；
+③ 在 Quilla.ZP 与 Quilla.FR 两个仓重复同样的核对；④ 上板用 `pinfo`
+复核 `APP_START` / `APP_END`。版本号的抬高不属于分区改动，只需在构建期
+覆盖共享头宏并重新签名。
+
 | 层 | 文件 / 符号 | 要设置的值 |
 | --- | --- | --- |
 | QBOOT | `quilla/arch/cpu/arm/<mcu>/soc.h` → `SOC_FLASH_END` | `FLASH_BASE + FLASH_SIZE - 1`（本板 `0x0807FFFF`）；QBOOT 由此推导 `APP_END`，缺失时直接 `#error` |
 | QBOOT | 构建宏 `QUILLA_QBOOT_RAM_START`、`QUILLA_QBOOT_RAM_SIZE` | 必须与工具的 `RAM_START` / `RAM_SIZE` 相等。GD32 构建传 `-DQUILLA_QBOOT_RAM_SIZE=0x00010000U`；PY32 用 16 KiB 默认值 |
 | QBOOT | 构建宏 `QUILLA_QBOOT_PAGE_SIZE` | 物理擦除页：GD32F502VE 为 **2 KiB**，PY32F040 为 **256 B**。决定 QIAP 页合并与 META 追加策略 |
-| QBOOT | 构建宏 `QUILLA_QBOOT_APP_START`、`QUILLA_QBOOT_FLAG_ADDR`、`QUILLA_QBOOT_APP_END` | 与 `APP_START` / `META_BASE` / `SOC_FLASH_END` 一致 |
+| QBOOT | 构建宏 `QUILLA_QBOOT_APP_START`、`QUILLA_QBOOT_APP_END`；META 几何取 `QUILLA_QBOOT_META_BASE` / `QUILLA_QBOOT_META_SIZE` | 与 `APP_START` / `META_BASE` / `SOC_FLASH_END` 一致 |
 | 上位机打包 | `tools/qboot_image.py` 上述常量 | `FLASH_SIZE`、`APP_SIZE`、`RAM_SIZE`、`FLASH_BASE` |
 | APP（Zephyr） | `app/prj.conf` | `CONFIG_FLASH_LOAD_OFFSET=0x7000`、`CONFIG_FLASH_LOAD_SIZE=APP_SIZE`（`0x79000`） |
 | APP（Zephyr） | `app/boards/gd/gd32f502ve_quilla/gd32f502ve_quilla.dts` | `&flash0 reg = <FLASH_BASE DT_SIZE_K(512)>`、`&sram0 reg = <RAM_START DT_SIZE_K(64)>`、`clock-frequency` |
@@ -73,6 +105,7 @@ Zephyr 配置、APP 内 META 写入模块，以及上位机的 `--meta-base` / `
 | APP（Keil） | `appliance/MDK-ARM/*.uvprojx`（FR） | IROM1 = `0x08007000` / `APP_SIZE`；IRAM1 = `RAM_START` / `RAM_SIZE`；带 `QAPP_BUILD` |
 | APP | META 写入模块的擦除页常量 | ZP：`app/src/quilla_meta.c` 的 `QZP_ERASE_PAGE_SIZE`（2048），带 `BUILD_ASSERT(slot == page)`；FR：`appliance/Src/app_qboot_meta.c` 的 `QB_PAGE_SIZE`（256） |
 | APP | secver 段 | `APP_START + 0x400`，每个 APP 构建都要产出，且被签名覆盖。ZP 由 `app/linker/quilla-secver.ld` 钉住 |
+| 跨镜像（QBOOT / ZP APP / FR APP） | `quilla/os/sys/quilla-version.h` → `QUILLA_APP_SECURITY_VERSION` | 默认 `1U`；发布不可回滚固件时构建期 `-DQUILLA_APP_SECURITY_VERSION=<n>` 覆盖。ZP 侧无 Kconfig 旋钮，见 `doc/zephyr-integration.zh-CN.md` 安全版本节 |
 
 ## 3. 移植步骤
 
@@ -80,7 +113,7 @@ Zephyr 配置、APP 内 META 写入模块，以及上位机的 `--meta-base` / `
 2. 在工具中设置 `FLASH_BASE`、`FLASH_SIZE`、`RAM_START`、`RAM_SIZE`，重算
    `APP_SIZE = FLASH_SIZE - 0x7000`。
 3. 在新 `arch/cpu/arm/<mcu>/soc.h` 补齐 `SOC_FLASH_END`，并为每个 QBOOT
-   target（CHECK / SEALED / SEC，GCC 与 Keil）设置上表所列构建宏。
+   target（CHECK / SEALED / SECURED，GCC 与 Keil）设置上表所列构建宏。
 4. 更新 Zephyr 的 `FLASH_LOAD_*`、板级 DTS `reg` 与 `app/Kconfig` 几何
    （或 FreeRTOS/Keil 的链接设置）；secver 记录保持在 `+0x400`。
 5. 更新 APP META 写入模块的擦除页常量。GD32 的 2 KiB 页恰好等于一个 META
@@ -104,7 +137,10 @@ secver 魔数与串口接线共 22 项，每次拉取上游后都应重跑。
 
 另外用 `nm` / `objdump` 检查 Zephyr ELF：初始 MSP 落在
 `[RAM_START, RAM_START + RAM_SIZE)` 内，复位向量是 APP 区内的 Thumb 地址，
-`_vector_start` 为 `APP_START`，`QAV1` 记录位于 `APP_START + 0x400`。
+`_vector_start` 为 `APP_START`，`QAV1` 记录位于 `APP_START + 0x400`；用
+`zephyr.bin` 偏移 `0x400` 处的 8 字节确认 `QAV1` 魔数与版本值。分区几何
+变更后还须上板执行 `pinfo` 复核 `APP_START` / `APP_END`，并在 ZP、FR 两个
+仓各重跑一次本节全部命令。
 
 ## 5. 时钟交接是另一件事
 

@@ -4,14 +4,10 @@
 
 menu "Quilla.ZP appliance"
 
-config QUILLA_ZP_SECURITY_VERSION
-	int "Firmware security version (QAV1 record)"
-	default 1
-	range 1 4294967295
-	help
-	  Version baked into the signed image at APP_START + 0x400. QBOOT reads
-	  it and refuses to install an image below the persisted floor. The
-	  value is part of the signed image; never supply it from the host.
+# The firmware security version is NOT configured here: it comes from the
+# shared Quilla header quilla/os/sys/quilla-version.h as
+# QUILLA_APP_SECURITY_VERSION (overridable per build with a -D define), so
+# QAPP, QBOOT and this appliance all use one version source.
 
 config QUILLA_ZP_APP_NAME
 	string "Application name printed in the [QAPP] banner"

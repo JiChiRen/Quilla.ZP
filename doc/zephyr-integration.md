@@ -75,8 +75,21 @@ that absolute address inside the first ROM output section. Later ROM sections
 therefore start after the record and cannot overlap it — the same layout
 Quilla's own QAPP linker script uses.
 
-The version comes from `CONFIG_QUILLA_ZP_SECURITY_VERSION` (Kconfig), never
-from the host updater. The record is inside the signed image.
+The version comes from `QUILLA_APP_SECURITY_VERSION` in the shared header
+`quilla/os/sys/quilla-version.h` — the same single source Quilla's own QAPP and
+QBOOT use, overridable per build with `-DQUILLA_APP_SECURITY_VERSION=<n>` —
+never from the host updater, and with no Zephyr Kconfig knob of its own. The
+record is inside the signed image.
+
+The four geometry values in `app/Kconfig` — `QUILLA_ZP_META_BASE`,
+`QUILLA_ZP_META_SIZE`, `QUILLA_ZP_APP_START` and `QUILLA_ZP_SECVER_OFFSET` —
+are **deliberate copies** of the QBOOT-side constants in `quilla-qboot-hal.h`
+and `quilla-version.h`. This is the trade-off of a hybrid architecture
+(bare-metal QBOOT + Zephyr APP with no shared build system) that keeps the
+upstream Zephyr tree untouched. They must be aligned by hand: follow the
+checklist in section 2 of the [MCU porting guide](mcu-porting.md) and run its
+section 4 verification whenever they change. Updating only one side produces no
+compile-time error; the two images silently disagree about the partition map.
 
 ## Console, geometry and clock — out-of-tree board
 

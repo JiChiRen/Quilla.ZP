@@ -21,7 +21,14 @@ target_sources(app PRIVATE
   src/led.c
 )
 
-target_include_directories(app PRIVATE src)
+# quilla-version.h is the single source for the signed security version
+# (QUILLA_APP_SECURITY_VERSION) and the QAV1 magic; it lives in the Quilla
+# subtree shipped alongside this appliance. No Zephyr Kconfig knob for the
+# version: override it per build with -DQUILLA_APP_SECURITY_VERSION=<n>.
+target_include_directories(app PRIVATE
+  src
+  ${CMAKE_CURRENT_SOURCE_DIR}/../quilla/os/sys
+)
 
 # The QAV1 security-version record must sit at a fixed flash address because
 # QBOOT reads it without a symbol table. A ROM_START linker snippet is the

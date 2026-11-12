@@ -23,7 +23,11 @@
  * This record sits inside the signed image, so its version cannot be changed
  * without the private key.
  */
-#define QUILLA_ZP_SECVER_MAGIC_U32 0x31564151U /* "QAV1" */
+/* The magic and version values come from the shared Quilla header
+ * quilla-version.h (QUILLA_APP_SECVER_MAGIC_U32 / QUILLA_APP_SECURITY_VERSION),
+ * included by quilla_secver.c; only the record layout is declared locally so
+ * the appliance stays independent of Quilla's headers for its type
+ * definitions. */
 
 typedef struct {
 	uint32_t magic;

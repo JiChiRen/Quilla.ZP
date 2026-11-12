@@ -63,8 +63,18 @@ QBOOT 在固定地址 `APP_START + 0x400` 读取 8 字节 `QAV1` 记录，不依
 内把该段钉到绝对地址。后续 ROM 段因此从记录之后开始，不会重叠——与 Quilla
 自身 QAPP 链接脚本的布局一致。
 
-版本取自 Kconfig 的 `CONFIG_QUILLA_ZP_SECURITY_VERSION`，不由上位机传入；
-记录位于受签名保护的镜像内。
+版本取自共享头文件 `quilla/os/sys/quilla-version.h` 的
+`QUILLA_APP_SECURITY_VERSION`（与 Quilla 自身 QAPP/QBOOT 同一个版本源，可在构建期用
+`-DQUILLA_APP_SECURITY_VERSION=<n>` 覆盖），不由上位机传入，也不设 Zephyr
+Kconfig 旋钮；记录位于受签名保护的镜像内。
+
+`app/Kconfig` 里 `QUILLA_ZP_META_BASE`、`QUILLA_ZP_META_SIZE`、
+`QUILLA_ZP_APP_START`、`QUILLA_ZP_SECVER_OFFSET` 四个几何值，是 QBOOT 侧
+`quilla-qboot-hal.h` / `quilla-version.h` 常量的**刻意复制**：这是 hybrid
+架构（裸机 QBOOT + Zephyr APP，两者不共享构建系统）下保留上游 Zephyr 树
+零改动的取舍。它们必须人工对齐，改动时按
+[MCU 移植说明](mcu-porting.zh-CN.md) 第 2 节的清单逐处同步并跑第 4 节验证；
+只改一侧不会在编译期报错，会静默错开分区。
 
 ## 串口、容量与时钟 — out-of-tree board
 

@@ -2,12 +2,13 @@
 
 **[English](build-and-upgrade.md)**
 
-> **状态**：本工作区已按第 3 节流程完成一次干净的 `west build`（Windows 原生 +
-> gnuarmemb，零告警），`zephyr.bin/elf/hex` 均正常产出，secver 段已核实位于
-> `0x08007400`。**真机验证已闭环（2026-11-09，QBOOT SEC 模式）**：QIAP 完整
-> 升级两次通过（ACK_SIGN 0x84）、横幅无乱码、多次冷启动一致、shell 正常、
-> ZP 自身 `swqboot`（XIP 下写 META flag + 冷复位）成功回到 `[BOOT]`。
-> 第 6、7 节保留作为复验清单。
+> **状态**：已完成干净的 Zephyr 构建（Windows 原生 + gnuarmemb，零告警），产物在
+> `app/build-w/zephyr/`，secver 段位于 `0x08007400`。**真机验证已闭环**：
+> 2026-11-09（QBOOT_SECURED）QIAP 升级两次 `ACK_SIGN 0x84`、横幅无乱码、
+> 多次冷启动一致、shell 正常、ZP 自身 `swqboot` 成功回到 `[BOOT]`；
+> 2026-11-12（GD32 真 OTP 两阶段）`OTP_COUNTER` 1→2、`APP_END=0x0807FFFF`
+> 不钳位、低版本镜像被 `NAK 0x0A ROLLBACK` 拒绝、同版本再升合法。
+> 第 6、7 节保留作为复验清单；第 3 节为迁移前工作区的历史记录。
 
 ## 1. 主机工具（Windows 原生）
 
@@ -74,7 +75,10 @@ set ZEPHYR_TOOLCHAIN_VARIANT=zephyr
 
 路线 A 失败、或需要可复现的上游测试工具链时改用路线 B。
 
-## 3. 工作区拓扑（重要）
+## 3. 工作区拓扑（迁移前历史记录；当前见第 4 节注记）
+
+> 本节记录的是仓库位于含空格路径时期（`...\Midora SA\...`）的做法。2026-11-11
+> 三仓迁至 `C:\D\workspace\prestudy\Quilla\go\` 后路径已无空格，junction 不再需要。
 
 `appliance/` **既是完整 Zephyr 树，也是 west manifest 仓库**
 （`appliance/west.yml`，81 个项目）。由此产生两条约束：
@@ -114,6 +118,28 @@ Zephyr 4.4 能否完全脱离 west workspace（仅用 `ZEPHYR_BASE` +
 
 ## 4. 构建命令
 
+> **路径注记（2026-11-11 仓库迁移后）**：三仓已迁至无空格路径，本节与第 3 节的
+> `C:\zph` junction 是迁移前的记录。实际构建可直接用仓库自带 `.venv` 内的
+> Python 3.12 / cmake / ninja 和 `app/build-w`，无需 junction；路径含空格的
+> 两个坑只在旧工作区路径下出现。
+
+**当前（迁移后）唯一构建入口**——以 Quilla.ZP 仓库根为当前目录，第 4 节下方
+的命令块为历史示例，勿照抄：
+
+```
+set ZEPHYR_BASE=%CD%\appliance
+set BOARD_ROOT=%CD%\app
+set ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
+set GNUARMEMB_TOOLCHAIN_PATH=C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_Rel1
+set ZEPHYR_MODULES=%CD%\modules\hal\gigadevice;%CD%\modules\hal\cmsis_6
+.venv\Lib\site-packages\cmake\data\bin\cmake.exe -B app\build-w -GNinja -S app -DBOARD=gd32f502ve_quilla -DBOARD_ROOT=app -DPython3_EXECUTABLE=%CD%\.venv\Scripts\python.exe -DCMAKE_MAKE_PROGRAM=%CD%\.venv\Scripts\ninja.exe
+.venv\Scripts\ninja.exe -C app\build-w
+```
+
+`Python3_EXECUTABLE` 与 `CMAKE_MAKE_PROGRAM` 必须显式指向 `.venv`：否则 cmake
+会抓到 PATH 上的 Python 3.13（缺 Zephyr 依赖）或找不到 ninja。产物为
+`app\build-w\zephyr\zephyr.bin`；本节后续命令均以仓库根为当前目录。
+
 ```
 set ZEPHYR_BASE=C:\zph\appliance
 set BOARD_ROOT=C:\zph\app
@@ -142,8 +168,8 @@ ninja -C C:\zph\build
 ## 5. 烧录前验证镜像
 
 ```
-arm-none-eabi-nm -n C:\zph\build\zephyr\zephyr.elf | findstr quilla_zp_secver
-arm-none-eabi-objdump -h C:\zph\build\zephyr\zephyr.elf
+arm-none-eabi-nm -n app\build-w\zephyr\zephyr.elf | findstr quilla_zp_secver
+arm-none-eabi-objdump -h app\build-w\zephyr\zephyr.elf
 ```
 
 检查项：
@@ -153,7 +179,7 @@ arm-none-eabi-objdump -h C:\zph\build\zephyr\zephyr.elf
 - 镜像落在 `0x08007000` .. `0x0807FFFF` 范围内。
 - `zephyr.bin` 前 8 字节是合法 MSP（位于 SRAM）与 APP 区内的 Thumb 复位地址。
 
-用现有工具合成出厂镜像（SEC 变体需要
+用现有工具合成出厂镜像（SECURED 变体需要
 `quilla/tools/_keytest/private.hex` 测试私钥）：
 
 **工具的 `FLASH_SIZE` / `APP_SIZE` / `RAM_SIZE` 是芯片相关配置**，此处按
@@ -162,21 +188,39 @@ QBOOT 与 APP 侧必须同步修改的位置，以及与 Quilla.FR 的对照，�
 [MCU 移植说明](mcu-porting.zh-CN.md)。
 
 ```
-python tools\qboot_image.py pack --boot <QBOOT_SEC.bin> ^
-  --app C:\zph\build\zephyr\zephyr.bin --out combined.bin ^
-  --key C:\zph\quilla\tools\_keytest\private.hex
+python tools\qboot_image.py pack --boot <QBOOT_SECURED.bin> ^
+  --app app\build-w\zephyr\zephyr.bin --out combined.bin ^
+  --key quilla\tools\_keytest\private.hex
 python tools\qboot_image.py verify --image combined.bin
 ```
+
+### 抬高固件安全版本
+
+`QUILLA_APP_SECURITY_VERSION` 的唯一来源是共享头
+`quilla/os/sys/quilla-version.h`（默认 `1U`），位于受签名保护的镜像内，
+上位机不传版本，ZP appliance 也不设 Zephyr Kconfig 旋钮。发布不可回滚的
+固件时在构建期覆盖该宏，再重新签名升级：
+
+```
+cmake -B app/build-w ... -DEXTRA_CFLAGS=-DQUILLA_APP_SECURITY_VERSION=2
+ninja -C app/build-w
+```
+
+覆盖值只留在本次 build 目录的 CMake cache：不带该参数重新配置会退回 `1U`。
+验证：`zephyr.bin` 偏移 `0x400` 为 `QAV1`、`0x404` 为新版本值；升级后
+`secver` 应显示对应 `FW_SECVER`。版本抬高**不属于分区改动**，无需同步
+`app/Kconfig` 几何；分区几何的人工对齐契约见
+[MCU 移植说明](mcu-porting.zh-CN.md) 第 2 节。
 
 ## 6. 真机升级
 
 先烧 QBOOT，再使用 `quilla/` clone 中的上位机：
 
 ```
-python C:\zph\quilla\tools\quilla_host_updater.py COM7 C:\zph\build\zephyr\zephyr.bin --key C:\zph\quilla\tools\_keytest\private.hex
+python quilla\tools\quilla_host_updater.py COM7 app\build-w\zephyr\zephyr.bin --key quilla\tools\_keytest\private.hex
 ```
 
-完成判据是 `ACK_SIGN 0x84`（SEALED/SEC）或 `ACK_END 0x83`（CHECK）。
+完成判据是 `ACK_SIGN 0x84`（SEALED/SECURED）或 `ACK_END 0x83`（CHECK）。
 `[QAPP]` 启动戳只是非致命的二次确认；本 appliance 打印完整 banner 字面量，
 应能匹配。
 
@@ -184,7 +228,11 @@ python C:\zph\quilla\tools\quilla_host_updater.py COM7 C:\zph\build\zephyr\zephy
 `swqboot` -> `[BOOT]` 横幅，随后用新镜像完成第二次完整 QIAP 升级。用 Keil
 烧录时选「Erase Sectors」而非全片擦除，避免抹掉 META manifest。
 
-## 7. 已知风险（编译已过，待上板确认）
+## 7. 已知风险与复验清单
+
+> 以下为集成期登记项。11-09 / 11-12 的真机验证已覆盖 QIAP 链路、时钟交接、
+> XIP 下 META 写入与 secver 落位；但 SoC 描述复用的寄存器级核对等项目未逐项
+> 单独复核，故保留为清单，不改写为"已验证"。
 
 - 为 GD32F502VE 复用 `gd32f503` SoC 描述尚未验证；外设地址、RCU 门控与
   FMC 行为需上板核对。

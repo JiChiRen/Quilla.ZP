@@ -21,7 +21,7 @@
 META 起址与 APP 起址可通过参数/GUI 覆盖，QBOOT 固定于 0x08000000）：
   0x08000000  QBOOT  0x6000  24 KiB（固定）
   0x08006000  META   0x1000   4 KiB (两个 2 KiB slot，记录 256 B)
-  0x08007000  APP    0x19000 100 KiB（至 0x08020000 end）
+  0x08007000  APP    0x79000 484 KiB（至 0x08080000 end）
 
 QBOOT_CHECK 的放行条件是：META 中存在合法 manifest（image_len != 0），
 且 SHA-256(APP 起址 .. +image_len) 与 manifest.hash 一致。
@@ -31,10 +31,19 @@ zero_sig 路径一致）。本工具不对安全性作任何超出该机制的�
 命令行：
   python qboot_image.py pack --boot QBOOT_CHECK.bin --app Project.bin \
                              --out combined.bin [--meta-out meta.bin] [--version 0] \
-                             [--meta-base 0x08006000] [--app-start 0x08007000]
+                             [--meta-base 0x08006000] [--app-start 0x08007000] \
+                             [--otp-counter-base ADDR]
   python qboot_image.py verify --image combined.bin \
-                               [--meta-base 0x08006000] [--app-start 0x08007000]
+                               [--meta-base 0x08006000] [--app-start 0x08007000] \
+                               [--otp-counter-base ADDR]
   python qboot_image.py selftest
+
+--otp-counter-base：仅当 QBOOT 以
+QUILLA_QBOOT_HW_COUNTER_LEVEL=QUILLA_QBOOT_HW_COUNTER_WPP 构建时传入
+WPP 计数区基址（该等级占用主闪存顶部写保护扇区，APP 末址超过它会被
+拒绝）。GD32F502VE 走 LEVEL=OTP：真 OTP 在 0x1FF20000 独立地址空间、
+不占 flash 分区，APP 分区不收缩（末址 = SOC_FLASH_END），不要传该参数；
+LEVEL=NONE 同样不传。PY32F040xB 的 WPP 计数区示例为 0x0801E000。
 """
 
 from __future__ import annotations
@@ -65,6 +74,13 @@ APP_SIZE = 0x00079000
 
 RAM_START = 0x20000000
 RAM_SIZE = 0x00010000
+
+# WPP 计数区基址（LEVEL=WPP 时占用主闪存顶部写保护扇区，见
+# quilla/doc/anti-rollback-counter.zh-CN.md §2.4）。GD32F502VE 走 LEVEL=OTP：
+# 真 OTP 在 0x1FF20000 独立地址空间、不占 flash 分区，APP 末址 =
+# SOC_FLASH_END，无 flash 计数区 → None。仅 WPP MCU（如 PY32 主闪存顶部
+# 8 KiB 写保护扇区）才需填对应基址。
+OTP_COUNTER_BASE = None
 
 # META 起址与 APP 起址可由调用方/GUI 覆盖（resolve_layout 校验约束）；
 # QBOOT 固定于 FLASH_BASE、占 QBOOT_SIZE，整片长度固定 FLASH_SIZE。
@@ -204,13 +220,18 @@ def resolve_layout(meta_base: int | None = None,
 
 
 def validate_app(app: bytes, app_start: int = APP_START,
-                 app_size: int = APP_SIZE) -> tuple[int, int]:
+                 app_size: int = APP_SIZE,
+                 otp_counter_base: int | None = None) -> tuple[int, int]:
     """校验 APP 镜像大小与向量表，返回 (初始MSP, 复位向量)。
 
     重点：SP 必须严格小于 RAM 末址。quilla 的
     quilla_qboot_hal_app_image_valid() 把 "SP >= RAM_START + RAM_SIZE"
     判为非法镜像并拒跳 APP；GCC 链接脚本若把 _estack 定义成
     ORIGIN(RAM)+LENGTH(RAM)（0x20004000）会正好踩中这条。
+
+    otp_counter_base：WPP 计数区基址（LEVEL=WPP 时该扇区受写保护）。
+    给定后 APP 镜像末址超过它即拒绝；None 不检查。LEVEL=OTP 的真 OTP
+    不占 flash 分区，应传 None。
     """
     if not app:
         raise ImageError("APP 镜像为空")
@@ -218,6 +239,14 @@ def validate_app(app: bytes, app_start: int = APP_START,
         raise ImageError(
             "APP 镜像 %d B 超过分区 %d B（起址 0x%08X）"
             % (len(app), app_size, app_start)
+        )
+    if otp_counter_base is not None and \
+            app_start + len(app) > otp_counter_base:
+        raise ImageError(
+            "APP 镜像末址 0x%08X 超过 WPP 计数区基址 0x%08X"
+            "（LEVEL=WPP 时计数扇区受写保护，"
+            "镜像长入该扇区会导致 QIAP 擦除失败）；请压缩镜像或缩小 APP 分区"
+            % (app_start + len(app), otp_counter_base)
         )
     if len(app) < 8:
         raise ImageError("APP 镜像不足 8 字节，读不到向量表")
@@ -406,7 +435,8 @@ def make_combined(boot: bytes, app: bytes, version: int = 0,
                   sign_seed: bytes | None = None,
                   preset_seal: bool = True,
                   meta_base: int | None = None,
-                  app_start: int | None = None) -> tuple[bytes, bytes, dict]:
+                  app_start: int | None = None,
+                  otp_counter_base: int | None = None) -> tuple[bytes, bytes, dict]:
     """返回 (整片 512 KiB 镜像, 256 B META 记录, manifest 信息字典)。
 
     meta_base / app_start 可覆盖默认布局（None 用出厂默认
@@ -429,7 +459,8 @@ def make_combined(boot: bytes, app: bytes, version: int = 0,
     """
     layout = resolve_layout(meta_base, app_start)
     validate_boot(boot)
-    validate_app(app, layout["app_start"], layout["app_size"])
+    validate_app(app, layout["app_start"], layout["app_size"],
+                 otp_counter_base=otp_counter_base)
 
     variant = detect_variant(boot)
     image_len = len(app)
@@ -489,12 +520,14 @@ def make_combined(boot: bytes, app: bytes, version: int = 0,
         "floor": floor,
         "meta_base": layout["meta_base"],
         "app_start": layout["app_start"],
+        "otp_counter_base": otp_counter_base,
     }
     return bytes(image), rec, info
 
 
 def verify_combined(image: bytes, meta_base: int | None = None,
-                    app_start: int | None = None) -> dict:
+                    app_start: int | None = None,
+                    otp_counter_base: int | None = None) -> dict:
     """按 QBOOT 的视角复核整片镜像（布局与打包时一致才放行）。"""
     if len(image) != FLASH_SIZE:
         raise ImageError(
@@ -507,7 +540,8 @@ def verify_combined(image: bytes, meta_base: int | None = None,
     boot_sp, boot_reset = validate_boot(boot_area)
     app_sp, app_reset = validate_app(
         image[layout["app_offset"]:layout["app_offset"] + layout["app_size"]],
-        layout["app_start"], layout["app_size"])
+        layout["app_start"], layout["app_size"],
+        otp_counter_base=otp_counter_base)
 
     rec = image[layout["meta_offset"]:layout["meta_offset"] + RECORD_SIZE]
     info = parse_meta_record(rec, image=image,
@@ -523,6 +557,7 @@ def verify_combined(image: bytes, meta_base: int | None = None,
         "boot_crc": crc32_ieee(boot_area),
         "meta_base": layout["meta_base"],
         "app_start": layout["app_start"],
+        "otp_counter_base": otp_counter_base,
     })
     return info
 
@@ -671,8 +706,24 @@ def selftest() -> None:
     else:
         raise AssertionError("APP 起址早于 META 区结束未被拒绝")
 
+    # 9) WPP 计数区镜像尺寸检查：长入计数区必须被拒，恰好贴线必须放行
+    try:
+        make_combined(bytes(boot), bytes(app), version=7,
+                      otp_counter_base=APP_START + 4096 - 1)
+    except ImageError:
+        pass
+    else:
+        raise AssertionError("APP 长入 WPP 计数区未被拒绝")
+    comb_o, _, info_o = make_combined(
+        bytes(boot), bytes(app), version=7,
+        otp_counter_base=APP_START + len(app))
+    assert info_o["otp_counter_base"] == APP_START + len(app)
+    comb_p, _, info_p = make_combined(
+        bytes(boot), bytes(app), version=7, otp_counter_base=None)
+    assert info_p["otp_counter_base"] is None and len(comb_p) == FLASH_SIZE
+
     print("selftest: OK (CRC32 / 记录格式 / 合成布局 / 篡改检测 / 向量表边界 / "
-          "变体检测 / Ed25519 出厂签名 / 自定义布局)")
+          "变体检测 / Ed25519 出厂签名 / 自定义布局 / WPP计数区尺寸检查)")
 
 
 # ---------------------------------------------------------------- CLI
@@ -711,6 +762,9 @@ def _print_info(info: dict) -> None:
         print("  seal        : 已预置（SEALED 首启免 ~20 s 验签）")
     if info.get("sig_zero") == 0 and variant == "CHECK":
         print("  sig         : 非零（CHECK 变体不验签，仅记录）")
+    if info.get("otp_counter_base"):
+        print("  WPP上限     : APP 末址 ≤ 0x%08X（计数扇区受写保护）"
+              % info["otp_counter_base"])
     print("  APP         : %d B (image_len)" % info["image_len"])
     print("  version     : %d" % info["version"])
     print("  flag        : %d (APP1)" % info.get("flag", FLAG_APP1))
@@ -736,6 +790,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="META 记录起址（默认 0x08006000），与 QBOOT 端配置一致")
     p_pack.add_argument("--app-start", type=lambda s: int(s, 0),
                         help="APP 起址（默认 0x08007000），须与 APP 链接基址一致")
+    p_pack.add_argument("--otp-counter-base", type=lambda s: int(s, 0),
+                        default=None,
+                        help="WPP 计数区基址（仅 LEVEL=WPP 时按目标 MCU 传入，"
+                             "如 PY32 0x0801E000）；GD32 走 LEVEL=OTP 用真 OTP、"
+                             "不占 flash 分区，无需传；LEVEL=NONE 也不要传")
 
     p_verify = sub.add_parser("verify", help="校验已有整片 bin")
     p_verify.add_argument("--image", required=True)
@@ -743,6 +802,9 @@ def main(argv: list[str] | None = None) -> int:
                           help="META 记录起址（默认 0x08006000）")
     p_verify.add_argument("--app-start", type=lambda s: int(s, 0),
                           help="APP 起址（默认 0x08007000）")
+    p_verify.add_argument("--otp-counter-base", type=lambda s: int(s, 0),
+                          default=None,
+                          help="WPP 计数区基址（打包时传了就传同一个值）")
 
     sub.add_parser("selftest", help="运行内置自检")
 
@@ -761,7 +823,8 @@ def main(argv: list[str] | None = None) -> int:
             combined, rec, info = make_combined(
                 boot, app, version=args.version,
                 sign_seed=sign_seed, preset_seal=not args.no_seal,
-                meta_base=args.meta_base, app_start=args.app_start)
+                meta_base=args.meta_base, app_start=args.app_start,
+                otp_counter_base=args.otp_counter_base)
             _write_file(args.out, combined)
             if args.meta_out:
                 _write_file(args.meta_out, rec)
@@ -777,7 +840,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "verify":
             image = _read_file(args.image)
             info = verify_combined(image, meta_base=args.meta_base,
-                                   app_start=args.app_start)
+                                   app_start=args.app_start,
+                                   otp_counter_base=args.otp_counter_base)
             print("校验通过：%s" % args.image)
             _print_info(info)
             print("  MSP/reset  : APP 0x%08X / 0x%08X" %
