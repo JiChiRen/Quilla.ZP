@@ -77,8 +77,8 @@ set ZEPHYR_TOOLCHAIN_VARIANT=zephyr
 
 ## 3. 工作区拓扑（迁移前历史记录；当前见第 4 节注记）
 
-> 本节记录的是仓库位于含空格路径时期（`...\Midora SA\...`）的做法。2026-11-11
-> 三仓迁至 `C:\D\workspace\prestudy\Quilla\go\` 后路径已无空格，junction 不再需要。
+> 本节记录的是仓库位于**含空格路径**时期（旧工作区目录名含空格）的做法。
+> 2026-11-11 三仓迁至无空格的短路径后，junction 不再需要。
 
 `appliance/` **既是完整 Zephyr 树，也是 west manifest 仓库**
 （`appliance/west.yml`，81 个项目）。由此产生两条约束：

@@ -87,8 +87,8 @@ toolchain is required.
 ## 3. Workspace topology (historical, before the repository move; see section 4)
 
 > This section records the setup used while the repositories lived under a
-> path containing spaces (`...\Midora SA\...`). Since 2026-11-11 all three
-> repos live under `C:\D\workspace\prestudy\Quilla\go\`, which is space-free;
+> path containing spaces (the old workspace directory name had a space).
+> Since 2026-11-11 all three repos live under a space-free path;
 > junctions are no longer needed.
 
 `appliance/` is a **full Zephyr tree and also the west manifest repo**
