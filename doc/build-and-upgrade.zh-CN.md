@@ -8,7 +8,7 @@
 > 多次冷启动一致、shell 正常、ZP 自身 `swqboot` 成功回到 `[BOOT]`；
 > 2026-11-12（GD32 真 OTP 两阶段）`OTP_COUNTER` 1→2、`APP_END=0x0807FFFF`
 > 不钳位、低版本镜像被 `NAK 0x0A ROLLBACK` 拒绝、同版本再升合法。
-> 第 6、7 节保留作为复验清单；第 3 节为迁移前工作区的历史记录。
+> 第 5、6 节保留作为复验清单。
 
 ## 1. 主机工具（Windows 原生）
 
@@ -75,56 +75,11 @@ set ZEPHYR_TOOLCHAIN_VARIANT=zephyr
 
 路线 A 失败、或需要可复现的上游测试工具链时改用路线 B。
 
-## 3. 工作区拓扑（迁移前历史记录；当前见第 4 节注记）
+## 3. 构建命令
 
-> 本节记录的是仓库位于**含空格路径**时期（旧工作区目录名含空格）的做法。
-> 2026-11-11 三仓迁至无空格的短路径后，junction 不再需要。
-
-`appliance/` **既是完整 Zephyr 树，也是 west manifest 仓库**
-（`appliance/west.yml`，81 个项目）。由此产生两条约束：
-
-1. **构建工作区路径不能含空格。** 源码路径含空格在 Windows 上的
-   CMake/Ninja/Zephyr 已知会出问题。另建一个无空格的短路径工作区
-   （如 `C:\zph`），用目录 junction 把现有 clone 暴露过去（junction 不改变两个 clone，仍然
-   可以 pull / merge）：
-
-   ```
-   mkdir C:\zph
-   mklink /J C:\zph\appliance "<...>\Quilla.ZP\appliance"
-   mklink /J C:\zph\quilla    "<...>\Quilla.ZP\quilla"
-   mklink /J C:\zph\app       "<...>\Quilla.ZP\app"
-   ```
-
-2. **GD32 HAL 模块是必需的。** `soc.h` 包含 `gd32f50x.h`，`SystemInit()`
-   与 pinctrl 头文件 `gd32f503v(g-e-c)xx-pinctrl.h` 都来自
-   `hal_gigadevice`。该模块在 `appliance/west.yml` 中声明为
-   `https://github.com/GD32-MCU-IOT/hal_gigadevice_zephyr.git`（`main` 分支，
-   路径 `modules/hal/gigadevice`）。完整 `west update` 会拉几十个无关模块；
-   最小做法是只克隆必需模块并告知 Zephyr：
-
-   ```
-   git clone https://github.com/GD32-MCU-IOT/hal_gigadevice_zephyr.git C:\zph\modules\hal\gigadevice
-   set EXTRA_ZEPHYR_MODULES=C:\zph\modules\hal\gigadevice
-   ```
-
-   `CONFIG_CPU_CORTEX_M` 会选中 `HAS_CMSIS_CORE`，可能还需要 CMSIS 模块，
-   首次构建会报出来。更稳妥的做法是正常 west workspace + 收窄的
-   `group-filter`。
-
-Zephyr 4.4 能否完全脱离 west workspace（仅用 `ZEPHYR_BASE` +
-`EXTRA_ZEPHYR_MODULES`）构建，需由首次构建确认。若模块发现失败，改为在
-`C:\zph` 执行 `west init -l C:\zph\appliance` 并
-`west update hal_gigadevice`。
-
-## 4. 构建命令
-
-> **路径注记（2026-11-11 仓库迁移后）**：三仓已迁至无空格路径，本节与第 3 节的
-> `C:\zph` junction 是迁移前的记录。实际构建可直接用仓库自带 `.venv` 内的
-> Python 3.12 / cmake / ninja 和 `app/build-w`，无需 junction；路径含空格的
-> 两个坑只在旧工作区路径下出现。
-
-**当前（迁移后）唯一构建入口**——以 Quilla.ZP 仓库根为当前目录，第 4 节下方
-的命令块为历史示例，勿照抄：
+构建环境自包含在仓库的 `.venv`（Python 3.12 / pip 版 cmake / ninja），交叉
+编译器用 gnuarmemb（`C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_Rel1`）。
+以下命令以 Quilla.ZP 仓库根为当前目录：
 
 ```
 set ZEPHYR_BASE=%CD%\appliance
@@ -134,38 +89,19 @@ set GNUARMEMB_TOOLCHAIN_PATH=C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_
 set ZEPHYR_MODULES=%CD%\modules\hal\gigadevice;%CD%\modules\hal\cmsis_6
 .venv\Lib\site-packages\cmake\data\bin\cmake.exe -B app\build-w -GNinja -S app -DBOARD=gd32f502ve_quilla -DBOARD_ROOT=app -DPython3_EXECUTABLE=%CD%\.venv\Scripts\python.exe -DCMAKE_MAKE_PROGRAM=%CD%\.venv\Scripts\ninja.exe
 .venv\Scripts\ninja.exe -C app\build-w
+python tools\check_contract.py
 ```
 
 `Python3_EXECUTABLE` 与 `CMAKE_MAKE_PROGRAM` 必须显式指向 `.venv`：否则 cmake
 会抓到 PATH 上的 Python 3.13（缺 Zephyr 依赖）或找不到 ninja。产物为
-`app\build-w\zephyr\zephyr.bin`；本节后续命令均以仓库根为当前目录。
-
-```
-set ZEPHYR_BASE=C:\zph\appliance
-set BOARD_ROOT=C:\zph\app
-python tools\check_contract.py
-
-cmake -B C:\zph\build -GNinja -S C:\zph\app ^
-  -DBOARD=gd32f502ve_quilla -DBOARD_ROOT=C:\zph\app
-ninja -C C:\zph\build
-```
+`app\build-w\zephyr\zephyr.bin`；后续命令均以仓库根为当前目录。
 
 `BOARD_ROOT` 必须是**包含** `boards/` 的目录，即 `app`，不是板目录本身。
 `app/CMakeLists.txt` 使用
 `find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})`，因此 `ZEPHYR_BASE`
 决定选用哪棵 Zephyr 树。
 
-> **路径含空格的坑（Windows 实测）**：若工程路径含空格（如本工作区），会踩两个坑：
-> ① CMake 生成的 `-imacros` 参数未加引号，被空格拆开，Ninja 直接报错；
-> ② Zephyr 的 `K_THREAD_DEFINE`/`K_HEAP_DEFINE` 把 `__FILE__` 嵌进汇编段名且不加引号，
-> GNU as 遇到空格报 `junk at end of line`。可行变通：配置成功后，把
-> `build/build.ninja` 与 `build/zephyr/misc/generated/syscalls_file_list.txt`
-> 中的长路径统一替换为 8.3 短路径（如 `C:\PROGRA~1` 形式），再运行 `ninja`。
-> 注意 `syscalls_file_list.txt` 与扫描目录必须用同一种路径形式，否则同一头文件
-> 会被解析两次，生成的 syscall 头重复定义。**把工程放在不含空格的路径下则全部免疫，
-> 这是推荐做法。**
-
-## 5. 烧录前验证镜像
+## 4. 烧录前验证镜像
 
 ```
 arm-none-eabi-nm -n app\build-w\zephyr\zephyr.elf | findstr quilla_zp_secver
@@ -212,7 +148,7 @@ ninja -C app/build-w
 `app/Kconfig` 几何；分区几何的人工对齐契约见
 [MCU 移植说明](mcu-porting.zh-CN.md) 第 2 节。
 
-## 6. 真机升级
+## 5. 真机升级
 
 先烧 QBOOT，再使用 `quilla/` clone 中的上位机：
 
@@ -228,7 +164,7 @@ python quilla\tools\quilla_host_updater.py COM7 app\build-w\zephyr\zephyr.bin --
 `swqboot` -> `[BOOT]` 横幅，随后用新镜像完成第二次完整 QIAP 升级。用 Keil
 烧录时选「Erase Sectors」而非全片擦除，避免抹掉 META manifest。
 
-## 7. 已知风险与复验清单
+## 6. 已知风险与复验清单
 
 > 以下为集成期登记项。11-09 / 11-12 的真机验证已覆盖 QIAP 链路、时钟交接、
 > XIP 下 META 写入与 secver 落位；但 SoC 描述复用的寄存器级核对等项目未逐项

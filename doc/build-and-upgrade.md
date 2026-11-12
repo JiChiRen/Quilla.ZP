@@ -11,8 +11,7 @@
 > 2026-11-12 (GD32 true-OTP, both phases) — `OTP_COUNTER` 1→2,
 > `APP_END=0x0807FFFF` with no clamp, a lower-version image refused with
 > `NAK 0x0A ROLLBACK`, and a same-version upgrade accepted.
-> Sections 6 and 7 remain as re-verification checklists; section 3 records
-> the workspace layout before the repository move.
+> Sections 5 and 6 remain as re-verification checklists.
 
 ## 1. Host tools (Windows native)
 
@@ -84,61 +83,12 @@ set ZEPHYR_TOOLCHAIN_VARIANT=zephyr
 Use Option B if Option A fails or if a reproducible, upstream-tested
 toolchain is required.
 
-## 3. Workspace topology (historical, before the repository move; see section 4)
+## 3. Build commands
 
-> This section records the setup used while the repositories lived under a
-> path containing spaces (the old workspace directory name had a space).
-> Since 2026-11-11 all three repos live under a space-free path;
-> junctions are no longer needed.
-
-`appliance/` is a **full Zephyr tree and also the west manifest repo**
-(`appliance/west.yml`, 81 projects). Two constraints follow:
-
-1. **Do not put the build workspace on a path containing spaces.** Spaces in
-   the source path are known to break CMake/Ninja/Zephyr on Windows. Create a
-   separate build workspace at a short path without spaces, such as
-   `C:\zph`, and expose the existing clones there with directory junctions (junctions do not change either clone, so both remain
-   pullable/mergeable):
-
-   ```
-   mkdir C:\zph
-   mklink /J C:\zph\appliance "<...>\Quilla.ZP\appliance"
-   mklink /J C:\zph\quilla    "<...>\Quilla.ZP\quilla"
-   mklink /J C:\zph\app       "<...>\Quilla.ZP\app"
-   ```
-
-2. **The GD32 HAL module is mandatory.** `soc.h` includes `gd32f50x.h`,
-   `SystemInit()` and the pinctrl header `gd32f503v(g-e-c)xx-pinctrl.h` all
-   come from `hal_gigadevice`, declared in `appliance/west.yml` as
-   `https://github.com/GD32-MCU-IOT/hal_gigadevice_zephyr.git` (branch
-   `main`, path `modules/hal/gigadevice`). A full `west update` pulls dozens
-   of unrelated modules; the minimal route is to clone only what is needed
-   and point Zephyr at it:
-
-   ```
-   git clone https://github.com/GD32-MCU-IOT/hal_gigadevice_zephyr.git C:\zph\modules\hal\gigadevice
-   set EXTRA_ZEPHYR_MODULES=C:\zph\modules\hal\gigadevice
-   ```
-
-   `CONFIG_CPU_CORTEX_M` selects `HAS_CMSIS_CORE`, so a CMSIS module may also
-   be required; the first build will report it. The full, safer route is a
-   normal west workspace with `west update` and a narrowed `group-filter`.
-
-Whether Zephyr 4.4 can build entirely without a west workspace (using
-`ZEPHYR_BASE` + `EXTRA_ZEPHYR_MODULES`) must be confirmed by the first build.
-If module discovery fails, run `west init -l C:\zph\appliance` in `C:\zph`
-and `west update hal_gigadevice` there instead.
-
-## 4. Build commands
-
-> **Path note (after the 2026-11-11 repository move)**: all three repos now
-> live under a space-free path. The `C:\zph` junction in sections 3 and 4 is a
-> record of the earlier workspace. Builds can use the repo's own `.venv`
-> (Python 3.12 / cmake / ninja) and `app/build-w` directly, without any
-> junction; the space-in-path pitfalls below only applied to the old path.
-
-**Current build entry point (after the move)** — run from the Quilla.ZP repo
-root. The command block below is a historical example; do not copy it:
+The build environment is self-contained in the repo's `.venv` (Python 3.12,
+pip-installed cmake and Ninja); the cross compiler is gnuarmemb
+(`C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_Rel1`). Run the
+following from the Quilla.ZP repo root:
 
 ```
 set ZEPHYR_BASE=%CD%\appliance
@@ -148,42 +98,20 @@ set GNUARMEMB_TOOLCHAIN_PATH=C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_
 set ZEPHYR_MODULES=%CD%\modules\hal\gigadevice;%CD%\modules\hal\cmsis_6
 .venv\Lib\site-packages\cmake\data\bin\cmake.exe -B app\build-w -GNinja -S app -DBOARD=gd32f502ve_quilla -DBOARD_ROOT=app -DPython3_EXECUTABLE=%CD%\.venv\Scripts\python.exe -DCMAKE_MAKE_PROGRAM=%CD%\.venv\Scripts\ninja.exe
 .venv\Scripts\ninja.exe -C app\build-w
+python tools\check_contract.py
 ```
 
 `Python3_EXECUTABLE` and `CMAKE_MAKE_PROGRAM` must point into `.venv`:
 otherwise CMake picks the system Python 3.13 (missing Zephyr dependencies) or
-cannot find Ninja. The output is `app\build-w\zephyr\zephyr.bin`; all later
-commands in this guide use the repo root as the working directory.
-
-```
-set ZEPHYR_BASE=C:\zph\appliance
-set BOARD_ROOT=C:\zph\app
-python tools\check_contract.py
-
-cmake -B C:\zph\build -GNinja -S C:\zph\app ^
-  -DBOARD=gd32f502ve_quilla -DBOARD_ROOT=C:\zph\app
-ninja -C C:\zph\build
-```
+cannot find Ninja. The output is `app\build-w\zephyr\zephyr.bin`; all
+later commands use the repo root as the working directory.
 
 `BOARD_ROOT` must be the directory **containing** `boards/`, i.e. `app`, not
 the board directory itself. `app/CMakeLists.txt` uses
 `find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})`, so `ZEPHYR_BASE` is
-what selects the GD32 downstream tree.
+what selects the Zephyr tree.
 
-> **Space-in-path pitfall (verified on Windows)**: if the project path
-> contains spaces, two failures occur: ① CMake emits unquoted `-imacros`
-> arguments that get split at the space, and Ninja fails; ② Zephyr's
-> `K_THREAD_DEFINE`/`K_HEAP_DEFINE` embed `__FILE__` into assembler section
-> names without quoting, and GNU as reports `junk at end of line`. A working
-> workaround: after a successful configure, replace the long paths in
-> `build/build.ninja` and `build/zephyr/misc/generated/syscalls_file_list.txt`
-> with 8.3 short paths (e.g. the `C:\PROGRA~1` form), then run `ninja`. The
-> file list and the scan directories must use the same path form, otherwise
-> every syscall header is parsed twice and the generated syscall headers
-> contain duplicate definitions. **Placing the project under a space-free
-> path avoids all of this and is the recommended approach.**
-
-## 5. Verify the produced image before flashing
+## 4. Verify the produced image before flashing
 
 ```
 arm-none-eabi-nm -n app\build-w\zephyr\zephyr.elf | findstr quilla_zp_secver
@@ -234,7 +162,7 @@ matching `FW_SECVER` with `secver` after the upgrade. Bumping the version is
 alignment contract for partition geometry is in section 2 of the
 [MCU porting guide](mcu-porting.md).
 
-## 6. On-target upgrade
+## 5. On-target upgrade
 
 Flash QBOOT first, then use the host updater from the `quilla/` clone:
 
@@ -251,7 +179,7 @@ Verify on hardware: banner with no garbling (160 MHz clock handover),
 upgrade with the new image. Use "Erase Sectors" rather than full-chip erase
 when flashing with Keil, so the META manifest is not wiped.
 
-## 7. Known risks and re-verification checklist
+## 6. Known risks and re-verification checklist
 
 > Items registered during integration. On-target verification on 11-09 / 11-12
 > covered the QIAP path, clock handover, META writes under XIP and secver
