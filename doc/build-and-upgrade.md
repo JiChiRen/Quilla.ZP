@@ -2,8 +2,8 @@
 
 **[中文](build-and-upgrade.zh-CN.md)**
 
-> **Status**: a clean Zephyr build has been completed in this workspace
-> (native Windows + gnuarmemb, zero warnings); outputs are in
+> **Status**: the reference build was made on native Windows with gnuarmemb
+> (GNU Arm Embedded 13.2.1, zero warnings); outputs land in
 > `app/build-w/zephyr/` and the secver section sits at `0x08007400`.
 > **On-target verification is closed**: 2026-11-09 (QBOOT_SECURED) — two
 > QIAP upgrades with `ACK_SIGN 0x84`, clean banner, identical cold boots,
@@ -16,28 +16,25 @@
 ## 1. Host tools (Windows native)
 
 Zephyr officially supports native Windows 10/11. WSL is explicitly **not**
-recommended by upstream because flashing and debugging from WSL is unreliable;
-on this machine `wsl.exe` is additionally blocked by the local security
-policy, so Windows native is the only route here.
+recommended by upstream because flashing and debugging from WSL is unreliable.
 
-Install with `winget` (already available on this machine), then reopen the
-terminal so PATH is refreshed:
+Install with `winget`, then reopen the terminal so PATH is refreshed:
 
 ```
 winget install Kitware.CMake Ninja-build.Ninja oss-winget.gperf `
   Python.Python.3.12 Git.Git oss-winget.dtc wget 7zip.7zip
 ```
 
-| Tool | Required version | Present on this machine |
-| --- | --- | --- |
-| CMake | >= 3.28.0 | no |
-| Ninja | recent | no |
-| Python | **3.12 strongly recommended** | `py -3.12` yes (uv-installed 3.12.14); `python` on PATH is 3.13.14, do not use it |
-| Devicetree compiler (dtc) | >= 1.4.6 | no |
-| gperf | recent | no |
-| Git | any recent | yes |
-| wget / 7-Zip | recent | no |
-| west | recent (`pip install west`) | no |
+| Tool | Required version |
+| --- | --- |
+| CMake | >= 3.28.0 |
+| Ninja | recent |
+| Python | **3.12 strongly recommended** — newer releases may fail to install Zephyr's dependencies on Windows (see below) |
+| Devicetree compiler (dtc) | >= 1.4.6 |
+| gperf | recent |
+| Git | any recent |
+| wget / 7-Zip | recent |
+| west | recent (`pip install west`) |
 
 Zephyr's own note: newer Python releases may fail on Windows when installing
 the required packages. Create the venv with the 3.12 launcher explicitly:
@@ -55,19 +52,19 @@ PowerShell activation requires
 
 ## 2. Cross compiler — two options
 
-**Option A (recommended for a quick first build): reuse the existing GNU Arm
-toolchain.** This machine already has Arm GNU Toolchain 13.2.1 with newlib at
-`C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_Rel1`. Zephyr 4.4 still
-ships the `gnuarmemb` and `cross-compile` toolchain variants, so no SDK
-download is needed:
+**Option A (recommended for a quick first build): reuse an existing GNU Arm
+toolchain.** This project is built and verified with Arm GNU Toolchain 13.2.1
+(with newlib); any recent 13.x release works. Zephyr 4.4 still ships the
+`gnuarmemb` and `cross-compile` toolchain variants, so no SDK download is
+needed:
 
 ```
 set ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
-set GNUARMEMB_TOOLCHAIN_PATH=C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_Rel1
+set GNUARMEMB_TOOLCHAIN_PATH=<dir containing the arm-none-eabi 13.x toolchain>
 ```
 
 or, equivalently, `ZEPHYR_TOOLCHAIN_VARIANT=cross-compile` with
-`CROSS_COMPILE=C:\toolchains\...\bin\arm-none-eabi-`. Upstream documents
+`CROSS_COMPILE=<toolchain dir>\bin\arm-none-eabi-`. Upstream documents
 these variants as supported in mechanism but **not officially tested** with
 arbitrary compilers; Zephyr SDK is the tested path.
 
@@ -86,15 +83,14 @@ toolchain is required.
 ## 3. Build commands
 
 The build environment is self-contained in the repo's `.venv` (Python 3.12,
-pip-installed cmake and Ninja); the cross compiler is gnuarmemb
-(`C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_Rel1`). Run the
-following from the Quilla.ZP repo root:
+pip-installed cmake and Ninja); the cross compiler is gnuarmemb (see §2).
+Run the following from the Quilla.ZP repo root:
 
 ```
 set ZEPHYR_BASE=%CD%\appliance
 set BOARD_ROOT=%CD%\app
 set ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
-set GNUARMEMB_TOOLCHAIN_PATH=C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_Rel1
+set GNUARMEMB_TOOLCHAIN_PATH=<arm-none-eabi 13.x toolchain dir>
 set ZEPHYR_MODULES=%CD%\modules\hal\gigadevice;%CD%\modules\hal\cmsis_6
 .venv\Lib\site-packages\cmake\data\bin\cmake.exe -B app\build-w -GNinja -S app -DBOARD=gd32f502ve_quilla -DBOARD_ROOT=app -DPython3_EXECUTABLE=%CD%\.venv\Scripts\python.exe -DCMAKE_MAKE_PROGRAM=%CD%\.venv\Scripts\ninja.exe
 .venv\Scripts\ninja.exe -C app\build-w
@@ -167,7 +163,7 @@ alignment contract for partition geometry is in section 2 of the
 Flash QBOOT first, then use the host updater from the `quilla/` clone:
 
 ```
-python quilla\tools\quilla_host_updater.py COM7 app\build-w\zephyr\zephyr.bin --key quilla\tools\_keytest\private.hex
+python quilla\tools\quilla_host_updater.py COMx app\build-w\zephyr\zephyr.bin --key quilla\tools\_keytest\private.hex
 ```
 
 The completion verdict is `ACK_SIGN 0x84` (SEALED/SECURED) or `ACK_END 0x83`

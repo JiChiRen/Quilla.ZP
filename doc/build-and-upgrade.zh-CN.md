@@ -2,8 +2,9 @@
 
 **[English](build-and-upgrade.md)**
 
-> **状态**：已完成干净的 Zephyr 构建（Windows 原生 + gnuarmemb，零告警），产物在
-> `app/build-w/zephyr/`，secver 段位于 `0x08007400`。**真机验证已闭环**：
+> **状态**：参考构建在 Windows 原生环境用 gnuarmemb 完成（GNU Arm Embedded
+> 13.2.1，零告警），产物落在 `app/build-w/zephyr/`，secver 段位于
+> `0x08007400`。**真机验证已闭环**：
 > 2026-11-09（QBOOT_SECURED）QIAP 升级两次 `ACK_SIGN 0x84`、横幅无乱码、
 > 多次冷启动一致、shell 正常、ZP 自身 `swqboot` 成功回到 `[BOOT]`；
 > 2026-11-12（GD32 真 OTP 两阶段）`OTP_COUNTER` 1→2、`APP_END=0x0807FFFF`
@@ -13,26 +14,25 @@
 ## 1. 主机工具（Windows 原生）
 
 Zephyr 官方支持 Windows 10/11 原生开发。上游明确**不推荐 WSL**（WSL 内烧录
-与调试不可靠）；本机 `wsl.exe` 还被本地安全策略禁止，因此 Windows 原生是唯一
-路线。
+与调试不可靠）。
 
-本机已有 `winget`，用它安装依赖后重新打开终端刷新 PATH：
+用 `winget` 安装依赖后重新打开终端刷新 PATH：
 
 ```
 winget install Kitware.CMake Ninja-build.Ninja oss-winget.gperf `
   Python.Python.3.12 Git.Git oss-winget.dtc wget 7zip.7zip
 ```
 
-| 工具 | 要求版本 | 本机现状 |
-| --- | --- | --- |
-| CMake | >= 3.28.0 | 无 |
-| Ninja | 较新版本 | 无 |
-| Python | **强烈推荐 3.12** | `py -3.12` 可用（uv 装的 3.12.14）；PATH 上的 `python` 是 3.13.14，不要用 |
-| Devicetree compiler (dtc) | >= 1.4.6 | 无 |
-| gperf | 较新版本 | 无 |
-| Git | 较新版本 | 有 |
-| wget / 7-Zip | 较新版本 | 无 |
-| west | 较新版本（`pip install west`） | 无 |
+| 工具 | 要求版本 |
+| --- | --- |
+| CMake | >= 3.28.0 |
+| Ninja | 较新版本 |
+| Python | **强烈推荐 3.12**——更新的版本在 Windows 上安装 Zephyr 依赖可能失败（见下文） |
+| Devicetree compiler (dtc) | >= 1.4.6 |
+| gperf | 较新版本 |
+| Git | 较新版本 |
+| wget / 7-Zip | 较新版本 |
+| west | 较新版本（`pip install west`） |
 
 Zephyr 官方提示：较新的 Python 在 Windows 上安装依赖包可能失败。用 3.12
 启动器显式创建虚拟环境：
@@ -50,18 +50,18 @@ PowerShell 激活需要先执行
 
 ## 2. 交叉编译器：两条路线
 
-**路线 A（推荐用于首次快速验证）：复用已有 GNU Arm 工具链。** 本机已有
-`C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_Rel1` 下的 Arm GNU
-Toolchain 13.2.1（含 newlib）。Zephyr 4.4 仍保留 `gnuarmemb` 与
-`cross-compile` 工具链变体，因此无需下载 SDK：
+**路线 A（推荐用于首次快速验证）：复用已有 GNU Arm 工具链。** 本项目用
+Arm GNU Toolchain 13.2.1（含 newlib）构建并验证通过；近期任意 13.x 版本
+均可。Zephyr 4.4 仍保留 `gnuarmemb` 与 `cross-compile` 工具链变体，因此无需
+下载 SDK：
 
 ```
 set ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
-set GNUARMEMB_TOOLCHAIN_PATH=C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_Rel1
+set GNUARMEMB_TOOLCHAIN_PATH=<arm-none-eabi 13.x 工具链所在目录>
 ```
 
 等价写法是 `ZEPHYR_TOOLCHAIN_VARIANT=cross-compile` 加
-`CROSS_COMPILE=C:\toolchains\...\bin\arm-none-eabi-`。上游说明这类变体的
+`CROSS_COMPILE=<工具链目录>\bin\arm-none-eabi-`。上游说明这类变体的
 机制受支持，但**未针对任意编译器做官方测试**；Zephyr SDK 才是测试过的路径。
 
 **路线 B（上游默认，约 1–2 GB）：Zephyr SDK 1.0.1 Windows 包。** 锁定树的
@@ -78,14 +78,13 @@ set ZEPHYR_TOOLCHAIN_VARIANT=zephyr
 ## 3. 构建命令
 
 构建环境自包含在仓库的 `.venv`（Python 3.12 / pip 版 cmake / ninja），交叉
-编译器用 gnuarmemb（`C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_Rel1`）。
-以下命令以 Quilla.ZP 仓库根为当前目录：
+编译器用 gnuarmemb（见第 2 节）。以下命令以 Quilla.ZP 仓库根为当前目录：
 
 ```
 set ZEPHYR_BASE=%CD%\appliance
 set BOARD_ROOT=%CD%\app
 set ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
-set GNUARMEMB_TOOLCHAIN_PATH=C:\toolchains\Arm_GNU_Toolchain_arm-none-eabi_13.2_Rel1
+set GNUARMEMB_TOOLCHAIN_PATH=<arm-none-eabi 13.x 工具链所在目录>
 set ZEPHYR_MODULES=%CD%\modules\hal\gigadevice;%CD%\modules\hal\cmsis_6
 .venv\Lib\site-packages\cmake\data\bin\cmake.exe -B app\build-w -GNinja -S app -DBOARD=gd32f502ve_quilla -DBOARD_ROOT=app -DPython3_EXECUTABLE=%CD%\.venv\Scripts\python.exe -DCMAKE_MAKE_PROGRAM=%CD%\.venv\Scripts\ninja.exe
 .venv\Scripts\ninja.exe -C app\build-w
@@ -153,7 +152,7 @@ ninja -C app/build-w
 先烧 QBOOT，再使用 `quilla/` clone 中的上位机：
 
 ```
-python quilla\tools\quilla_host_updater.py COM7 app\build-w\zephyr\zephyr.bin --key quilla\tools\_keytest\private.hex
+python quilla\tools\quilla_host_updater.py COMx app\build-w\zephyr\zephyr.bin --key quilla\tools\_keytest\private.hex
 ```
 
 完成判据是 `ACK_SIGN 0x84`（SEALED/SECURED）或 `ACK_END 0x83`（CHECK）。

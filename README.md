@@ -83,12 +83,11 @@ Verified on real hardware (GD32F502VE, QBOOT V0.11.0002 in SEC mode):
   secver=1) passes with ACK_SIGN 0x84 again; META dual-slot records and
   anti-rollback behave correctly across repeated upgrades
 
-Windows notes: the workspace path contains a space, which breaks both
-CMake/Ninja and GCC (`__FILE__` ends up inside unquoted assembler section
-names). The build directory in this workspace uses a documented workaround
-(8.3 short paths everywhere after configuration); see
-`doc/build-and-upgrade.md`. Place the project under a space-free path and
-none of this applies.
+Windows notes: a workspace path containing a space breaks both CMake/Ninja
+and GCC (`__FILE__` ends up inside unquoted assembler section names). Place
+the project under a space-free path and none of this applies; if the path
+cannot be changed, one workaround is to use 8.3 short paths everywhere after
+configuration.
 
 `python tools/check_contract.py` passes 22/22 checks against the two clones.
 It compares partition geometry, META record layout, flag values, secver magic,

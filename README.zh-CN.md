@@ -52,7 +52,7 @@ appliance 侧的所有行为都通过 Zephyr 机制注册，不塞进任何无�
 
 ## 验证状态
 
-**编译：已验证。上板：QIAP 全流程升级一次通过（2026-11-09）。** 已在本机
+**编译：已验证。上板：QIAP 全流程升级一次通过（2026-11-09）。** 已在
 Windows 原生环境用 Zephyr 4.4（`ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb`，GNU Arm
 Embedded 13.2）完成一次干净的 `west build -b gd32f502ve_quilla`，零告警通过：
 
@@ -73,10 +73,9 @@ Embedded 13.2）完成一次干净的 `west build -b gd32f502ve_quilla`，零告
 - 从 ZP APP 发起的第二次完整 QIAP 升级（同版本 secver=1）再次通过
   ACK_SIGN 0x84，META 双槽记录与防回滚在重复升级下表现正常
 
-Windows 注意事项：本工作区路径含空格，会同时破坏 CMake/Ninja 与 GCC
-（`__FILE__` 进入未加引号的汇编段名）。本工作区的构建目录采用文档化的变通
-方案（配置完成后统一替换为 8.3 短路径），见 `doc/build-and-upgrade.md`。
-把工程放在不含空格的路径下则完全不受影响。
+Windows 注意事项：路径含空格会同时破坏 CMake/Ninja 与 GCC（`__FILE__`
+进入未加引号的汇编段名）。把工程放在不含空格的路径下则完全不受影响；路径
+无法调整时，可在配置完成后统一替换为 8.3 短路径绕过。
 
 `python tools/check_contract.py` 对两个 clone 的 22 项检查全部通过，覆盖分区
 几何、META 记录布局、flag 取值、secver 魔数、串口接线与 CRC 参考向量。每次

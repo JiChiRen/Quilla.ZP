@@ -46,6 +46,7 @@ APP_KCONFIG = APP / "Kconfig"
 APP_META_C = APP / "src/quilla_meta.c"
 APP_META_H = APP / "src/quilla_meta.h"
 APP_SEGVER_H = APP / "src/quilla_secver.h"
+APP_SEGVER_C = APP / "src/quilla_secver.c"
 APP_BOARD_DTS = APP / "boards/gd/gd32f502ve_quilla/gd32f502ve_quilla.dts"
 APP_PINCTRL = APP / "boards/gd/gd32f502ve_quilla/gd32f502ve_quilla-pinctrl.dtsi"
 
@@ -127,6 +128,7 @@ def main() -> int:
     meta_c = read(APP_META_C)
     meta_h = read(APP_META_H)
     sec_h = read(APP_SEGVER_H)
+    sec_c = read(APP_SEGVER_C)
     dts = read(APP_BOARD_DTS)
     pin = read(APP_PINCTRL)
 
@@ -144,9 +146,13 @@ def main() -> int:
     sec_off = num(ver, "QUILLA_APP_SECVER_OFF")
     check(sec_off == kconfig_num(cfg, "QUILLA_ZP_SECVER_OFFSET"),
           "secver offset matches (0x%X)" % (sec_off or 0))
-    check(num(ver, "QUILLA_APP_SECVER_MAGIC_U32") ==
-          num(sec_h, "QUILLA_ZP_SECVER_MAGIC_U32"),
-          "secver magic QAV1 matches")
+    # The appliance record no longer redefines the magic/version locally:
+    # quilla_secver.c initializes quilla_zp_secver from the shared header
+    # macros, so the contract is that the initializer references exactly the
+    # macros QBOOT and the host updater also use (single source of truth).
+    check("QUILLA_APP_SECVER_MAGIC_U32" in sec_c and
+          "QUILLA_APP_SECURITY_VERSION" in sec_c,
+          "secver record initialized from shared quilla-version.h macros")
 
     # ---- META record layout -------------------------------------------------
     pairs = (
