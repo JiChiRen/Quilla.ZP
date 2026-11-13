@@ -12,4 +12,6 @@
 # them as C: the language bar should reflect the product code, not its tooling.
 #
 # Linguist applies this override only after .gitattributes is committed.
-tools/*.py -linguist-detectable
+# The `=false` spelling is used rather than the equivalent `-linguist-detectable`
+# unset form because it is understood by both older and current Linguist.
+tools/*.py linguist-detectable=false
