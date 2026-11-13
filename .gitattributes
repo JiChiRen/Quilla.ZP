@@ -1,0 +1,15 @@
+# Repository language statistics
+#
+# The shipped firmware is C: the out-of-tree Zephyr application under app/src/,
+# plus the QBOOT and Zephyr upstream trees (quilla/, appliance/, modules/) that
+# are deliberately NOT tracked in this repository -- they stay independent,
+# pullable clones (see .gitignore and README.md "Layout").
+#
+# The two Python files under tools/ are host-side helpers (binary-contract
+# checker and factory image packer), not firmware. Because those helpers are
+# larger than the tracked C sources, GitHub otherwise labels this repository
+# "Python". Keep them out of the language statistics rather than relabelling
+# them as C: the language bar should reflect the product code, not its tooling.
+#
+# Linguist applies this override only after .gitattributes is committed.
+tools/*.py -linguist-detectable
