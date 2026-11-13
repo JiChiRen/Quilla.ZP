@@ -23,6 +23,11 @@ a binary flash contract.
 Both upstream clones are deliberately excluded by `.gitignore`. Recreate them
 with the commands in `doc/build-and-upgrade.md`.
 
+GitHub language statistics: `tools/*.py` is excluded via `.gitattributes`
+because those files are host-side helpers, not firmware. The repository is
+classified by its C product code; most of that C lives in the untracked
+upstream clones above and does not appear in the language bar.
+
 ## The contract
 
 | Item | Value |

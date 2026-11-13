@@ -20,6 +20,10 @@
 
 两个上游 clone 由 `.gitignore` 排除，重建命令见 `doc/build-and-upgrade.md`。
 
+GitHub 语言统计：`tools/*.py` 经 `.gitattributes` 排除（上位机辅助脚本，不是
+固件）。仓库按 C 产品代码归类；其中大部分 C 代码位于上面两个不跟踪的上游
+clone 中，不会体现在语言条里。
+
 ## 二进制契约
 
 | 项 | 值 |
